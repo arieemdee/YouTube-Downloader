@@ -21,7 +21,8 @@ const {
 
 const {
     updateYtDlp,
-    checkForUpdate
+    checkForUpdate,
+    clearUpdateCache
 } = require("../services/update.service");
 
 router.post("/formats", async (req, res) => {
@@ -206,6 +207,24 @@ router.post('/update', async (req, res) => {
         res.status(500).json({
             status: 'error',
             error: err.message || 'Failed to update yt-dlp'
+        });
+    }
+});
+
+// 👇 ENDPOINT BARU: Clear update cache
+// Gunakan untuk force check update tanpa menunggu 24 jam
+// Endpoint ini akan menghapus file .update-cache.json
+router.post('/clear-update-cache', async (req, res) => {
+    try {
+        const result = clearUpdateCache();
+        res.json({
+            success: result.success,
+            message: result.success ? 'Cache cleared, next check will hit API' : 'Cache already cleared'
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: err.message || 'Failed to clear cache'
         });
     }
 });

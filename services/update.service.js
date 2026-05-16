@@ -7,6 +7,122 @@ const YTDLP_RELEASES_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/
 const YTDLP_PATH = path.join(YTDLP_DIR, "yt-dlp.exe");
 const YTDLP_BACKUP = path.join(YTDLP_DIR, "yt-dlp.exe.backup");
 
+// 👇 CACHE CONFIGURATION - Untuk mengurangi pengecekan ke GitHub API
+// Simpan hasil check update dalam file JSON agar tidak perlu hit API setiap kali
+const CACHE_FILE = path.join(YTDLP_DIR, ".update-cache.json");
+const CACHE_DURATION = 24 * 60 * 60 * 1000;  // 24 JAM dalam milliseconds
+
+/**
+ * FUNGSI HELPER 1: BACA CACHE DARI FILE
+ * 
+ * Tujuan:
+ * - Membaca cache yang disimpan di file .update-cache.json
+ * - Cache berisi informasi versi terbaru yang sudah pernah di-check
+ * 
+ * Cara Kerja:
+ * - Cek apakah file CACHE_FILE ada di direktori bin
+ * - Jika ada → baca file dan parse JSON
+ * - Jika tidak ada → return null
+ * 
+ * Return:
+ * - Object cache (jika file ada): { latestVersion, releaseDate, timestamp }
+ * - null (jika file tidak ada atau error)
+ * 
+ * Kegunaan:
+ * - Menghindari API calls yang tidak perlu
+ * - Menghemat resource dan bandwidth
+ * - Mempercepat response time
+ */
+function readCache() {
+    try {
+        if (fs.existsSync(CACHE_FILE)) {
+            const data = fs.readFileSync(CACHE_FILE, "utf8");
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        console.log("Could not read cache file");
+    }
+    return null;
+}
+
+/**
+ * FUNGSI HELPER 2: SIMPAN CACHE KE FILE
+ * 
+ * Tujuan:
+ * - Menyimpan hasil check update ke file JSON
+ * - Data ini bisa digunakan kembali sebelum 24 jam berlalu
+ * 
+ * Cara Kerja:
+ * - Terima parameter data (latestVersion, releaseDate, etc)
+ * - Tambahkan timestamp (waktu saat ini) ke dalam data
+ * - Simpan ke file CACHE_FILE sebagai JSON format
+ * 
+ * Parameter:
+ * - data: Object yang berisi { latestVersion, releaseDate }
+ * 
+ * Output:
+ * - File JSON tersimpan di bin/.update-cache.json
+ * 
+ * Contoh file yang tersimpan:
+ * {
+ *   "latestVersion": "2024.12.16",
+ *   "releaseDate": "2024-12-16T10:30:00Z",
+ *   "timestamp": 1734334200000
+ * }
+ */
+function saveCache(data) {
+    try {
+        const cacheData = {
+            ...data,
+            timestamp: Date.now()  // 👈 Simpan waktu cache dibuat (dalam milliseconds)
+        };
+        fs.writeFileSync(CACHE_FILE, JSON.stringify(cacheData, null, 2));
+    } catch (err) {
+        console.log("Could not write cache file");
+    }
+}
+
+/**
+ * FUNGSI HELPER 3: CEK APAKAH CACHE MASIH VALID/SEGAR
+ * 
+ * Tujuan:
+ * - Memastikan cache yang akan digunakan masih "aman" untuk dipakai
+ * - Jika cache sudah lebih dari 24 jam, harus di-refresh dari API
+ * 
+ * Cara Kerja:
+ * - Ambil timestamp dari cache (kapan cache dibuat)
+ * - Hitung umur cache: sekarang - timestamp
+ * - Bandingkan dengan CACHE_DURATION (24 jam)
+ * 
+ * LOGIKA:
+ * Jika cache ada DAN umur < 24 jam → Cache VALID (gunakan cache)
+ * Jika cache tidak ada ATAU umur ≥ 24 jam → Cache INVALID (refresh dari API)
+ * 
+ * Analogi Kehidupan Nyata:
+ * - Cache = daftar belanja kemarin
+ * - 24 jam = masa berlaku daftar belanja
+ * - Jika masih dalam 24 jam → gunakan daftar lama
+ * - Jika sudah > 24 jam → buat daftar baru (harga mungkin berubah)
+ * 
+ * Parameter:
+ * - cache: Object dari readCache() { latestVersion, releaseDate, timestamp }
+ * 
+ * Return:
+ * - true: Cache masih valid, boleh digunakan
+ * - false: Cache sudah expired, perlu refresh dari API
+ */
+function isCacheValid(cache) {
+    if (!cache || !cache.timestamp) {
+        return false;  // Tidak ada cache, return false
+    }
+    
+    const now = Date.now();
+    const cacheAge = now - cache.timestamp;  // Umur cache dalam milliseconds
+    
+    // 👇 Jika cache umur-nya dibawah 24 jam, cache VALID
+    return cacheAge < CACHE_DURATION;  // CACHE_DURATION = 24 jam dalam ms
+}
+
 /**
  * FUNGSI 1: MENGAMBIL VERSI TERBARU DARI GITHUB
  * 
@@ -115,7 +231,37 @@ function getCurrentVersion() {
 }
 
 /**
- * Download file from URL with retry logic
+ * FUNGSI 5: DOWNLOAD FILE DARI URL DENGAN RETRY LOGIC
+ * 
+ * Tujuan:
+ * - Download file yt-dlp.exe dari GitHub dengan error handling
+ * - Jika gagal, retry otomatis hingga 3 kali
+ * - Handle timeout, network error, dan HTTP error
+ * 
+ * Cara Kerja:
+ * 1. Buat stream untuk menulis file ke disk
+ * 2. Hubungkan ke URL dan mulai download
+ * 3. Handle berbagai error scenarios:
+ *    - Redirect (301/302) → Follow redirect ke URL baru
+ *    - HTTP error (bukan 200) → Reject dengan error message
+ *    - Timeout → Retry otomatis
+ *    - Connection error → Retry otomatis
+ * 4. Setiap retry: tunggu 2 detik sebelum coba lagi
+ * 5. Setelah 3 kali gagal → Return final error
+ * 
+ * Parameter:
+ * - url: URL file yang akan di-download
+ * - outputPath: Path lokal tempat file disimpan
+ * - retries: Jumlah retry jika gagal (default: 3)
+ * 
+ * Return:
+ * - Promise: resolve dengan outputPath jika sukses
+ * - Promise: reject dengan error message jika gagal semua retry
+ * 
+ * Fitur Keamanan:
+ * - Auto cleanup file temp jika error
+ * - Handle broken connections
+ * - Prevent half-downloaded files
  */
 function downloadFile(url, outputPath, retries = 3) {
     return new Promise((resolve, reject) => {
@@ -124,9 +270,9 @@ function downloadFile(url, outputPath, retries = 3) {
             let timedOut = false;
 
             const req = https.get(url, {
-                timeout: 30000
+                timeout: 30000  // 30 detik timeout
             }, (response) => {
-                // Handle redirects
+                // 👇 Handle HTTP redirects (301, 302)
                 if (response.statusCode === 301 || response.statusCode === 302) {
                     file.destroy();
                     fs.unlink(outputPath, () => {});
@@ -136,6 +282,7 @@ function downloadFile(url, outputPath, retries = 3) {
                     return;
                 }
 
+                // 👇 Handle non-200 HTTP responses
                 if (response.statusCode !== 200) {
                     file.destroy();
                     fs.unlink(outputPath, () => {});
@@ -143,19 +290,21 @@ function downloadFile(url, outputPath, retries = 3) {
                     return;
                 }
 
+                // 👇 Track download progress (optional)
                 let downloadedBytes = 0;
                 const totalBytes = parseInt(response.headers["content-length"], 10);
 
                 response.on("data", (chunk) => {
                     downloadedBytes += chunk.length;
                     const progress = Math.round((downloadedBytes / totalBytes) * 100);
+                    // Progress dapat digunakan untuk UI progress bar
                 });
 
                 response.pipe(file);
 
                 file.on("finish", () => {
                     file.close();
-                    resolve(outputPath);
+                    resolve(outputPath);  // 👈 SUCCESS
                 });
 
                 file.on("error", (err) => {
@@ -164,6 +313,7 @@ function downloadFile(url, outputPath, retries = 3) {
                 });
             });
 
+            // 👇 Handle timeout
             req.on("timeout", () => {
                 timedOut = true;
                 req.destroy();
@@ -172,26 +322,27 @@ function downloadFile(url, outputPath, retries = 3) {
                 
                 if (retries > 0) {
                     console.log(`Download timeout, retrying... (${retries} attempts left)`);
-                    setTimeout(() => attempt(), 2000);
+                    setTimeout(() => attempt(), 2000);  // Wait 2s before retry
                 } else {
                     reject(new Error("Download timeout - failed after 3 retries"));
                 }
             });
 
+            // 👇 Handle connection errors
             req.on("error", (err) => {
                 file.destroy();
                 fs.unlink(outputPath, () => {});
                 
                 if (!timedOut && retries > 0) {
                     console.log(`Download error: ${err.message}, retrying... (${retries} attempts left)`);
-                    setTimeout(() => attempt(), 2000);
+                    setTimeout(() => attempt(), 2000);  // Wait 2s before retry
                 } else if (!timedOut) {
                     reject(err);
                 }
             });
         };
 
-        attempt();
+        attempt();  // 👈 Mulai attempt pertama
     });
 }
 
@@ -316,21 +467,53 @@ async function updateYtDlp() {
  * FUNGSI 3: MENGECEK APAKAH ADA UPDATE YANG TERSEDIA
  * 
  * Fungsi ini akan:
- * 1. Mengambil versi terbaru dari GitHub
- * 2. Mengambil versi yang terinstall saat ini
- * 3. MEMBANDINGKAN keduanya
- * 4. Return hasil perbandingan
+ * 1. CEK CACHE DULU - Jika ada cache yang masih valid (< 24 jam)
+ *    → Gunakan cache (HEMAT RESOURCE, tidak hit API)
+ * 2. Jika cache sudah expired atau tidak ada
+ *    → Hit GitHub API untuk ambil versi terbaru
+ * 3. Simpan hasilnya ke cache untuk penggunaan next time
+ * 4. Bandingkan versi lama vs versi terbaru
+ * 
+ * KEUNTUNGAN:
+ * - Refresh halaman berkali-kali tidak akan hit API berulang-ulang
+ * - Hanya check API maksimal 1x per 24 jam
+ * - Hemat resource & bandwidth
  */
 async function checkForUpdate(retries = 2) {
     try {
+        // 👇 LANGKAH 1: CEK CACHE DULU
+        const cache = readCache();
+        
+        if (isCacheValid(cache)) {
+            console.log("Using cached update check (still valid for 24h)");
+            
+            // Ambil versi yang terinstall saat ini
+            let currentVersion = "unknown";
+            try {
+                currentVersion = await getCurrentVersion();
+            } catch (err) {
+                console.log("Could not determine current version");
+            }
+            
+            // Return hasil dari cache, tapi perbarui currentVersion
+            // karena versi terinstall bisa berubah setelah update manual
+            return {
+                updateAvailable: currentVersion !== cache.latestVersion,
+                currentVersion,
+                latestVersion: cache.latestVersion,
+                releaseDate: cache.releaseDate,
+                cached: true  // 👈 Tandai bahwa ini dari cache
+            };
+        }
+
+        console.log("Cache expired or not found, checking GitHub API...");
+        
+        // 👇 LANGKAH 2: CACHE TIDAK ADA/EXPIRED, HIT API
         let lastError = null;
         
         for (let i = 0; i <= retries; i++) {
             try {
-                // 👇 AMBIL VERSI TERBARU DARI GITHUB
                 const latestInfo = await getLatestVersion();
-                
-                // 👇 AMBIL VERSI LAMA YANG TERINSTALL
                 let currentVersion = "unknown";
 
                 try {
@@ -339,16 +522,20 @@ async function checkForUpdate(retries = 2) {
                     console.log("Could not determine current version");
                 }
 
-                // 👇 PERBANDINGAN VERSI
-                // Jika SAMA: tidak perlu update
-                // Jika BERBEDA: ada update tersedia
                 const updateAvailable = currentVersion !== latestInfo.version;
 
-                return {
-                    updateAvailable,           // true = ada update, false = tidak ada update
-                    currentVersion,            // Versi lama (dari file yang terinstall)
-                    latestVersion: latestInfo.version,  // Versi terbaru (dari GitHub)
+                // 👇 LANGKAH 3: SIMPAN HASIL KE CACHE UNTUK PENGGUNAAN NANTI
+                saveCache({
+                    latestVersion: latestInfo.version,
                     releaseDate: latestInfo.releaseDate
+                });
+
+                return {
+                    updateAvailable,
+                    currentVersion,
+                    latestVersion: latestInfo.version,
+                    releaseDate: latestInfo.releaseDate,
+                    cached: false  // 👈 Tandai bahwa ini fresh dari API
                 };
             } catch (err) {
                 lastError = err;
@@ -372,8 +559,39 @@ async function checkForUpdate(retries = 2) {
 }
 
 module.exports = {
-    updateYtDlp,
+    // 👇 FUNGSI UTAMA 1: Cek apakah ada update
+    // Digunakan oleh: Routes GET /api/check-update
+    // Mengembalikan: { updateAvailable, currentVersion, latestVersion, cached }
     checkForUpdate,
+    
+    // 👇 FUNGSI UTAMA 2: Jalankan proses update (download & replace)
+    // Digunakan oleh: Routes POST /api/update
+    // Mengembalikan: { status, message, currentVersion, latestVersion }
+    updateYtDlp,
+    
+    // 👇 FUNGSI HELPER 1: Ambil versi terbaru dari GitHub API
+    // Digunakan internally oleh: checkForUpdate, updateYtDlp
+    // Mengembalikan: { version, downloadUrl, releaseDate }
     getLatestVersion,
-    getCurrentVersion
+    
+    // 👇 FUNGSI HELPER 2: Ambil versi yang terinstall di local
+    // Digunakan internally oleh: checkForUpdate, updateYtDlp
+    // Mengembalikan: version string (contoh: "2024.12.10")
+    getCurrentVersion,
+    
+    // 👇 FUNGSI HELPER 3: Hapus cache file untuk force refresh
+    // Digunakan oleh: Routes POST /api/clear-update-cache
+    // Mengembalikan: { success: true/false }
+    clearUpdateCache: () => {
+        try {
+            if (fs.existsSync(CACHE_FILE)) {
+                fs.unlinkSync(CACHE_FILE);
+                console.log("Update cache cleared");
+                return { success: true };
+            }
+        } catch (err) {
+            console.log("Could not clear cache");
+        }
+        return { success: false };
+    }
 };

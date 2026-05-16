@@ -149,6 +149,26 @@
             padding: 8px 15px;
         }
 
+        .cache-info {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        #clearCacheBtn {
+            width: auto;
+            padding: 6px 10px;
+            font-size: 12px;
+            margin-top: 5px;
+            background: #444;
+            color: #888;
+        }
+
+        #clearCacheBtn:hover {
+            background: #555;
+            color: #aaa;
+        }
+
     </style>
 
 </head>
@@ -164,6 +184,11 @@
         </button>
         <button id="updateBtn" onclick="performUpdate()" style="display:none;">
             📥 Update Sekarang
+        </button>
+        <!-- Cache Info & Clear Cache Button -->
+        <div class="cache-info" id="cacheInfo"></div>
+        <button id="clearCacheBtn" onclick="clearUpdateCache()" style="display:none;">
+            🗑️ Clear Cache
         </button>
     </div>
 
@@ -416,9 +441,13 @@
             const checkBtn = document.getElementById('checkUpdateBtn');
             const updateBtn = document.getElementById('updateBtn');
             const statusDiv = document.getElementById('updateStatus');
+            const cacheInfoDiv = document.getElementById('cacheInfo');
+            const clearCacheBtn = document.getElementById('clearCacheBtn');
 
             checkBtn.disabled = true;
             updateBtn.style.display = 'none';
+            cacheInfoDiv.textContent = '';
+            clearCacheBtn.style.display = 'none';
             statusDiv.className = 'update-status checking';
             statusDiv.textContent = '🔄 Memeriksa update...';
 
@@ -430,6 +459,15 @@
                     statusDiv.className = 'update-status error';
                     statusDiv.textContent = '❌ Error: ' + data.error;
                     return;
+                }
+
+                // 👇 Tampilkan cache status
+                if (data.cached) {
+                    cacheInfoDiv.textContent = '💾 Menggunakan cache (diperbarui dalam 24 jam terakhir) | ';
+                    clearCacheBtn.style.display = 'inline-block';
+                } else {
+                    cacheInfoDiv.textContent = '🔄 Baru di-check dari GitHub API';
+                    clearCacheBtn.style.display = 'inline-block';
                 }
 
                 if (data.updateAvailable) {
@@ -497,6 +535,41 @@
                 statusDiv.textContent = '❌ Error: ' + err.message;
             } finally {
                 updateBtn.disabled = false;
+            }
+        }
+
+        // 👇 FUNGSI BARU: Clear update cache
+        // Gunakan untuk force check update tanpa menunggu 24 jam
+        async function clearUpdateCache() {
+            const clearCacheBtn = document.getElementById('clearCacheBtn');
+            const cacheInfoDiv = document.getElementById('cacheInfo');
+
+            clearCacheBtn.disabled = true;
+            cacheInfoDiv.textContent = '🗑️ Sedang menghapus cache...';
+
+            try {
+                const res = await fetch('/api/clear-update-cache', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    cacheInfoDiv.textContent = '✅ Cache dihapus! Next check akan hit API baru.';
+                    // Auto check update setelah clear cache
+                    setTimeout(() => {
+                        checkUpdate();
+                    }, 1000);
+                } else {
+                    cacheInfoDiv.textContent = '⚠️ Cache sudah kosong';
+                }
+            } catch (err) {
+                cacheInfoDiv.textContent = '❌ Error: ' + err.message;
+            } finally {
+                clearCacheBtn.disabled = false;
             }
         }
 
