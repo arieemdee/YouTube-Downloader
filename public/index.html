@@ -86,6 +86,57 @@
             font-size:12px;
         }
 
+        /* 👇 BRANDING SECTION - MD Engine */
+        .branding {
+            text-align: center;
+            margin: -15px 0 25px 0;
+            padding: 15px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+            border-radius: 6px;
+            border: 1px solid #1a4a1a;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .branding:hover {
+            border: 1px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .branding a {
+            text-decoration: none;
+            color: #0f0;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            display: inline-block;
+            padding: 8px 15px;
+            background: rgba(0, 255, 0, 0.05);
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .branding a:hover {
+            background: rgba(0, 255, 0, 0.15);
+            border: 1px solid #0f0;
+            text-shadow: 0 0 8px #0f0;
+            transform: scale(1.05);
+        }
+
+        .branding-icon {
+            font-size: 18px;
+            margin-right: 8px;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         /* Update section */
         .update-section {
             margin: 20px 0;
@@ -176,22 +227,6 @@
 
     <h1>🎬 YouTube Downloader</h1>
 
-    <!-- Update Section -->
-    <div class="update-section">
-        <div id="updateStatus" class="update-status"></div>
-        <button id="checkUpdateBtn" onclick="checkUpdate()">
-            🔄 Cek Update
-        </button>
-        <button id="updateBtn" onclick="performUpdate()" style="display:none;">
-            📥 Update Sekarang
-        </button>
-        <!-- Cache Info & Clear Cache Button -->
-        <div class="cache-info" id="cacheInfo"></div>
-        <button id="clearCacheBtn" onclick="clearUpdateCache()" style="display:none;">
-            🗑️ Clear Cache
-        </button>
-    </div>
-
     <input
         type="text"
         id="url"
@@ -227,6 +262,28 @@
         <div class="progress-text" id="progressText">0%</div>
     </div>
 
+    <!-- Update Section -->
+    <div class="update-section">
+        <div id="updateStatus" class="update-status"></div>
+        <button id="checkUpdateBtn" onclick="checkUpdate()">
+            🔄 Cek Update
+        </button>
+        <button id="updateBtn" onclick="performUpdate()" style="display:none;">
+            📥 Update Sekarang
+        </button>
+        <!-- Cache Info & Clear Cache Button -->
+        <div class="cache-info" id="cacheInfo"></div>
+        <button id="clearCacheBtn" onclick="clearUpdateCache()" style="display:none;">
+            🗑️ Clear Cache
+        </button>
+    </div>
+    <!-- 👇 BRANDING - MD Engine -->
+    <span class="branding">
+        <a href="https://md-engine.com" target="_blank" rel="noopener noreferrer">
+            <span class="branding-icon">⚙️</span>
+            Powered by MD Engine
+        </a>
+    </span>
     <pre id="result"></pre>
 
     <script>
