@@ -119,6 +119,13 @@
 
         const checkFormatBtn = document.getElementById("checkFormatBtn");
         const downloadBtn = document.getElementById("downloadBtn");
+        const urlInput = document.getElementById('url');
+        
+        // select-all on focus and keep selection on mouse click
+        if (urlInput) {
+          urlInput.addEventListener('focus', e => e.target.select());
+          urlInput.addEventListener('mouseup', e => e.preventDefault());
+        }
 
         async function getFormats(){
             checkFormatBtn.disabled = true;
