@@ -17,6 +17,15 @@ function runYtDlp(args, timeoutMs = 30000) {
     let stderr = "";
     let timedOut = false;
 
+    const normalizeOutput = (text = "") => {
+        return text
+            .toString()
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join("\n");
+    };
+
     const timeout = setTimeout(() => {
         timedOut = true;
         child.kill("SIGTERM");
@@ -48,10 +57,10 @@ function runYtDlp(args, timeoutMs = 30000) {
             }
 
             if (code !== 0) {
-                return reject(stderr || `Perintah selesai dengan kode ${code}`);
+                return reject(normalizeOutput(stderr || `Perintah selesai dengan kode ${code}`));
             }
 
-            resolve(stdout);
+            resolve(normalizeOutput(stdout));
         });
     });
 

@@ -2,6 +2,15 @@ const express = require("express");
 
 const router = express.Router();
 
+const normalizeOutput = (text = "") => {
+    return text
+        .toString()
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join("\n");
+};
+
 // Map of active downloads: id -> { child }
 const downloads = new Map();
 
@@ -25,12 +34,12 @@ router.post("/formats", async (req, res) => {
     try {
         const result = await promise;
         if (!req.aborted && !res.headersSent) {
-            res.send(result);
+            res.send(normalizeOutput(result));
         }
     } catch (err) {
         if (!req.aborted && !res.headersSent) {
             res.send(
-                "❌ Gagal mengambil format\n\n" + err
+                "❌ Gagal mengambil format\n\n" + normalizeOutput(err)
             );
         }
     } finally {
@@ -56,13 +65,13 @@ router.post("/download", async (req, res) => {
         const result = await promise;
         if (!req.aborted && !res.headersSent) {
             res.send(
-                "✅ Download selesai!\n\n" + result
+                "✅ Download selesai!\n\n" + normalizeOutput(result)
             );
         }
     } catch (err) {
         if (!req.aborted && !res.headersSent) {
             res.send(
-                "❌ Download gagal\n\n" + err
+                "❌ Download gagal\n\n" + normalizeOutput(err)
             );
         }
     } finally {
@@ -108,7 +117,10 @@ router.get("/download-stream", (req, res) => {
         }
 
         // forward other lines as normal messages
-        const lines = text.split(/\r?\n/).filter(Boolean);
+        const lines = text
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
         lines.forEach((line) => res.write(`data: ${line}\n\n`));
     };
 
@@ -126,16 +138,16 @@ router.get("/download-stream", (req, res) => {
 
     req.on("close", onCloseReq);
 
-    promise.then((result) => {
-        // send final message and close
-        const final = (result || "").toString();
-        const lines = final.split(/\r?\n/).filter(Boolean);
-        lines.forEach((line) => res.write(`data: ${line}\n\n`));
+    promise.then(() => {
+        // close after the process completes
         res.write(`event: done\ndata: ✅ Download selesai\n\n`);
         res.end();
     }).catch((err) => {
         const msg = err && err.toString ? err.toString() : JSON.stringify(err);
-        const lines = msg.split(/\r?\n/).filter(Boolean);
+        const lines = msg
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
         lines.forEach((line) => res.write(`data: ${line}\n\n`));
         res.write(`event: error\ndata: ❌ Download gagal\n\n`);
         res.end();
