@@ -120,11 +120,34 @@
         const checkFormatBtn = document.getElementById("checkFormatBtn");
         const downloadBtn = document.getElementById("downloadBtn");
         const urlInput = document.getElementById('url');
+        const formatInput = document.getElementById('format');
+        const formatsPre = document.getElementById('formats');
+        const resultPre = document.getElementById('result');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const retryBtn = document.getElementById('retryBtn');
+        const progressWrap = document.getElementById('progressWrap');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
         
         // select-all on focus and keep selection on mouse click
         if (urlInput) {
           urlInput.addEventListener('focus', e => e.target.select());
           urlInput.addEventListener('mouseup', e => e.preventDefault());
+          urlInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              getFormats();
+            }
+          });
+        }
+
+        if (formatInput) {
+          formatInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              downloadVideo();
+            }
+          });
         }
 
         async function getFormats(){
@@ -132,7 +155,7 @@
             checkFormatBtn.textContent = "Memeriksa...";
 
             try {
-                const url = document.getElementById("url").value;
+                const url = urlInput.value;
 
                 const res = await fetch("/api/formats", {
                     method:"POST",
@@ -143,9 +166,9 @@
                 });
 
                 const text = await res.text();
-                document.getElementById("formats").textContent = text;
+                formatsPre.textContent = text;
             } catch (err) {
-                document.getElementById("formats").textContent = "Terjadi kesalahan saat memeriksa format.";
+                formatsPre.textContent = "Terjadi kesalahan saat memeriksa format.";
             } finally {
                 checkFormatBtn.disabled = false;
                 checkFormatBtn.textContent = "Cek Format";
@@ -153,46 +176,39 @@
         }
 
         async function downloadVideo(){
-            const url = document.getElementById("url").value.trim();
-            const format = document.getElementById("format").value.trim();
+            const url = urlInput.value.trim();
+            const format = formatInput.value.trim();
 
             if (!url) {
-                document.getElementById("result").textContent = "❌ URL tidak boleh kosong!";
+                resultPre.textContent = "❌ URL tidak boleh kosong!";
                 return;
             }
 
             if (!format) {
-                document.getElementById("result").textContent = "❌ Format tidak boleh kosong!";
+                resultPre.textContent = "❌ Format tidak boleh kosong!";
                 return;
             }
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = "Downloading...";
-            document.getElementById("result").textContent = "";
+            resultPre.textContent = "";
 
             // Use EventSource (SSE) to receive real-time progress
             const params = new URLSearchParams({ url, format });
             const es = new EventSource(`/api/download-stream?${params.toString()}`);
             let currentDownloadId = null;
 
-            const cancelBtn = document.getElementById('cancelBtn');
-            const retryBtn = document.getElementById('retryBtn');
             cancelBtn.style.display = 'inline-block';
             cancelBtn.disabled = false;
             retryBtn.style.display = 'none';
-
-            const progressWrap = document.getElementById('progressWrap');
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
 
             progressWrap.style.display = 'block';
             progressBar.style.width = '0%';
             progressText.textContent = '0%';
 
             es.onmessage = (e) => {
-                const pre = document.getElementById("result");
-                pre.textContent += e.data + "\n";
-                pre.scrollTop = pre.scrollHeight;
+                resultPre.textContent += e.data + "\n";
+                resultPre.scrollTop = resultPre.scrollHeight;
             };
 
             es.addEventListener('progress', (e) => {
@@ -210,20 +226,18 @@
             });
 
             es.addEventListener('done', (e) => {
-                const pre = document.getElementById("result");
-                pre.textContent += '\n✅ Selesai.\n';
+                resultPre.textContent += '\n✅ Selesai.\n';
                 es.close();
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
-                document.getElementById("format").value = "";
+                formatInput.value = "";
                 cancelBtn.style.display = 'none';
                 // hide progress after brief pause
                 setTimeout(() => { progressWrap.style.display = 'none'; }, 800);
             });
 
             es.addEventListener('error', (e) => {
-                const pre = document.getElementById("result");
-                pre.textContent += '\n❌ Terjadi kesalahan saat mengunduh.\n';
+                resultPre.textContent += '\n❌ Terjadi kesalahan saat mengunduh.\n';
                 es.close();
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
@@ -245,15 +259,13 @@
                         body: JSON.stringify({ id: currentDownloadId })
                     });
                     const json = await res.json();
-                    const pre = document.getElementById('result');
                     if (json && json.ok) {
-                        pre.textContent += '\n⚠️ Download dibatalkan oleh pengguna.\n';
+                        resultPre.textContent += '\n⚠️ Download dibatalkan oleh pengguna.\n';
                     } else {
-                        pre.textContent += '\n⚠️ Gagal membatalkan download.\n';
+                        resultPre.textContent += '\n⚠️ Gagal membatalkan download.\n';
                     }
                 } catch (err) {
-                    const pre = document.getElementById('result');
-                    pre.textContent += '\n⚠️ Error saat membatalkan.\n';
+                    resultPre.textContent += '\n⚠️ Error saat membatalkan.\n';
                 } finally {
                     try { es.close(); } catch (e) {}
                     downloadBtn.disabled = false;
@@ -266,7 +278,6 @@
 
             // retry handler to re-run download with same inputs
             window.retryDownload = function () {
-                const retryBtn = document.getElementById('retryBtn');
                 retryBtn.style.display = 'none';
                 // re-trigger download using current input values
                 downloadVideo();
@@ -276,8 +287,7 @@
             es.onerror = (err) => {
                 // if readyState is CLOSED (2), connection was closed normally
                 if (es.readyState === EventSource.CLOSED) return;
-                const pre = document.getElementById("result");
-                pre.textContent += '\n❌ Koneksi terputus.\n';
+                resultPre.textContent += '\n❌ Koneksi terputus.\n';
                 es.close();
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
