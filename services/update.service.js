@@ -1,11 +1,18 @@
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const { spawn } = require("child_process");
 const { YTDLP_DIR } = require("../utils/paths");
 
 const YTDLP_RELEASES_API = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
 const YTDLP_PATH = path.join(YTDLP_DIR, "yt-dlp.exe");
 const YTDLP_BACKUP = path.join(YTDLP_DIR, "yt-dlp.exe.backup");
+
+// Timeout and retry defaults
+const DEFAULT_API_TIMEOUT = 10000;       // 10 seconds untuk GitHub API
+const DEFAULT_VERSION_TIMEOUT = 8000;    // 8 seconds untuk yt-dlp --version
+const DEFAULT_DOWNLOAD_TIMEOUT = 30000;  // 30 seconds untuk download
+const DOWNLOAD_RETRY_DELAY = 2000;      // 2 seconds antara retry
 
 // 👇 CACHE CONFIGURATION - Untuk mengurangi pengecekan ke GitHub API
 // Simpan hasil check update dalam file JSON agar tidak perlu hit API setiap kali
@@ -132,58 +139,91 @@ function isCacheValid(cache) {
  * 3. Mencari file "yt-dlp.exe" di dalam release tersebut
  * 4. Return versi terbaru beserta URL untuk download
  */
-function getLatestVersion() {
+function getLatestVersion(retries = 1) {
     return new Promise((resolve, reject) => {
-        const options = {
-            hostname: "api.github.com",
-            path: "/repos/yt-dlp/yt-dlp/releases/latest", // 👈 Ambil release TERBARU
-            method: "GET",
-            headers: {
-                "User-Agent": "youtube-gui-updater"
-            },
-            timeout: 10000
-        };
+        const attempt = (remaining) => {
+            const options = {
+                hostname: "api.github.com",
+                path: "/repos/yt-dlp/yt-dlp/releases/latest",
+                method: "GET",
+                headers: {
+                    "User-Agent": "youtube-gui-updater",
+                    Accept: "application/vnd.github.v3+json"
+                },
+                timeout: DEFAULT_API_TIMEOUT
+            };
 
-        const req = https.request(options, (res) => {
-            let data = "";
+            const req = https.request(options, (res) => {
+                if (res.statusCode === 301 || res.statusCode === 302) {
+                    const redirectUrl = res.headers.location;
+                    req.destroy();
+                    if (redirectUrl) {
+                        return resolve(getLatestVersion(remaining));
+                    }
+                }
 
-            // Kumpulkan semua response data
-            res.on("data", (chunk) => {
-                data += chunk;
+                if (res.statusCode !== 200) {
+                    let body = "";
+                    res.on("data", (chunk) => body += chunk);
+                    res.on("end", () => {
+                        const message = `GitHub API returned ${res.statusCode}`;
+                        if (remaining > 0) {
+                            setTimeout(() => attempt(remaining - 1), DOWNLOAD_RETRY_DELAY);
+                        } else {
+                            reject(new Error(message));
+                        }
+                    });
+                    return;
+                }
+
+                let data = "";
+                res.on("data", (chunk) => {
+                    data += chunk;
+                });
+
+                res.on("end", () => {
+                    try {
+                        const release = JSON.parse(data);
+                        const downloadUrl = release.assets.find(
+                            (asset) => asset.name === "yt-dlp.exe"
+                        )?.browser_download_url;
+
+                        if (!downloadUrl) {
+                            return reject(new Error("yt-dlp.exe not found in latest release"));
+                        }
+
+                        resolve({
+                            version: release.tag_name,
+                            downloadUrl,
+                            releaseDate: release.published_at
+                        });
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
             });
 
-            res.on("end", () => {
-                try {
-                    // Parse JSON response dari GitHub
-                    const release = JSON.parse(data);
-                    
-                    // 👇 DETEKSI VERSI TERBARU: ambil dari field "tag_name"
-                    // Contoh: "2024.12.16" atau "2025.01.15"
-                    const downloadUrl = release.assets.find(
-                        (asset) => asset.name === "yt-dlp.exe"
-                    )?.browser_download_url;
+            req.on("timeout", () => {
+                req.destroy();
+                if (remaining > 0) {
+                    setTimeout(() => attempt(remaining - 1), DOWNLOAD_RETRY_DELAY);
+                } else {
+                    reject(new Error("API request timeout - network connection unstable"));
+                }
+            });
 
-                    if (!downloadUrl) {
-                        reject(new Error("yt-dlp.exe not found in latest release"));
-                    }
-
-                    resolve({
-                        version: release.tag_name,        // 👈 INI VERSI TERBARU (dari GitHub)
-                        downloadUrl: downloadUrl,
-                        releaseDate: release.published_at
-                    });
-                } catch (err) {
+            req.on("error", (err) => {
+                if (remaining > 0) {
+                    setTimeout(() => attempt(remaining - 1), DOWNLOAD_RETRY_DELAY);
+                } else {
                     reject(err);
                 }
             });
-        });
 
-        req.on("error", reject);
-        req.on("timeout", () => {
-            req.destroy();
-            reject(new Error("API request timeout - network connection unstable"));
-        });
-        req.end();
+            req.end();
+        };
+
+        attempt(retries);
     });
 }
 
@@ -200,33 +240,54 @@ function getLatestVersion() {
  * - Maka akan keluar output seperti: "2024.12.10"
  * - Kita mengambil output itu sebagai versi saat ini (versi lama)
  */
-function getCurrentVersion() {
+function getCurrentVersion(timeout = DEFAULT_VERSION_TIMEOUT) {
     return new Promise((resolve, reject) => {
-        const { spawn } = require("child_process");
-        
-        // Jalankan: yt-dlp.exe --version
-        const child = spawn(YTDLP_PATH, ["--version"]);
+        if (!fs.existsSync(YTDLP_PATH)) {
+            return resolve("unknown");
+        }
+
+        const child = spawn(YTDLP_PATH, ["--version"], {
+            stdio: ["ignore", "pipe", "pipe"]
+        });
 
         let output = "";
+        let stderr = "";
+        let settled = false;
 
-        // Kumpulkan output dari stdout
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            if (child && !child.killed) child.kill();
+            reject(new Error("Getting current version timed out"));
+        }, timeout);
+
         child.stdout.on("data", (data) => {
             output += data.toString();
         });
 
-        // Saat process selesai
-        child.on("close", () => {
-            try {
-                // 👇 DETEKSI VERSI LAMA: trim output string
-                // Contoh output: "2024.12.10\n" → di-trim menjadi "2024.12.10"
-                const version = output.trim();
-                resolve(version);  // 👈 INI VERSI LAMA (dari file yang terinstall)
-            } catch (err) {
-                reject(err);
-            }
+        child.stderr.on("data", (data) => {
+            stderr += data.toString();
         });
 
-        child.on("error", reject);
+        child.on("error", (err) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            reject(err);
+        });
+
+        child.on("close", (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+
+            if (code !== 0 && !output.trim()) {
+                const errMsg = stderr.trim() || `yt-dlp exited with code ${code}`;
+                return reject(new Error(errMsg));
+            }
+
+            resolve(output.trim() || "unknown");
+        });
     });
 }
 
@@ -265,46 +326,44 @@ function getCurrentVersion() {
  */
 function downloadFile(url, outputPath, retries = 3) {
     return new Promise((resolve, reject) => {
-        const attempt = () => {
+        const attempt = (remaining) => {
             const file = fs.createWriteStream(outputPath);
             let timedOut = false;
 
             const req = https.get(url, {
-                timeout: 30000  // 30 detik timeout
+                timeout: DEFAULT_DOWNLOAD_TIMEOUT
             }, (response) => {
-                // 👇 Handle HTTP redirects (301, 302)
                 if (response.statusCode === 301 || response.statusCode === 302) {
                     file.destroy();
                     fs.unlink(outputPath, () => {});
-                    downloadFile(response.headers.location, outputPath, retries)
-                        .then(resolve)
-                        .catch(reject);
-                    return;
+                    const redirectUrl = response.headers.location;
+                    if (redirectUrl) {
+                        return downloadFile(redirectUrl, outputPath, remaining).then(resolve).catch(reject);
+                    }
+                    return reject(new Error("Download redirect without location header"));
                 }
 
-                // 👇 Handle non-200 HTTP responses
                 if (response.statusCode !== 200) {
                     file.destroy();
                     fs.unlink(outputPath, () => {});
-                    reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
-                    return;
+                    return reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
                 }
 
-                // 👇 Track download progress (optional)
                 let downloadedBytes = 0;
-                const totalBytes = parseInt(response.headers["content-length"], 10);
+                const totalBytes = parseInt(response.headers["content-length"], 10) || 0;
 
                 response.on("data", (chunk) => {
                     downloadedBytes += chunk.length;
-                    const progress = Math.round((downloadedBytes / totalBytes) * 100);
-                    // Progress dapat digunakan untuk UI progress bar
+                    if (totalBytes > 0) {
+                        const progress = Math.round((downloadedBytes / totalBytes) * 100);
+                    }
                 });
 
                 response.pipe(file);
 
                 file.on("finish", () => {
                     file.close();
-                    resolve(outputPath);  // 👈 SUCCESS
+                    resolve(outputPath);
                 });
 
                 file.on("error", (err) => {
@@ -313,36 +372,34 @@ function downloadFile(url, outputPath, retries = 3) {
                 });
             });
 
-            // 👇 Handle timeout
             req.on("timeout", () => {
                 timedOut = true;
                 req.destroy();
                 file.destroy();
                 fs.unlink(outputPath, () => {});
-                
-                if (retries > 0) {
-                    console.log(`Download timeout, retrying... (${retries} attempts left)`);
-                    setTimeout(() => attempt(), 2000);  // Wait 2s before retry
+
+                if (remaining > 0) {
+                    console.log(`Download timeout, retrying... (${remaining} attempts left)`);
+                    setTimeout(() => attempt(remaining - 1), DOWNLOAD_RETRY_DELAY);
                 } else {
-                    reject(new Error("Download timeout - failed after 3 retries"));
+                    reject(new Error("Download timeout - failed after retries"));
                 }
             });
 
-            // 👇 Handle connection errors
             req.on("error", (err) => {
                 file.destroy();
                 fs.unlink(outputPath, () => {});
-                
-                if (!timedOut && retries > 0) {
-                    console.log(`Download error: ${err.message}, retrying... (${retries} attempts left)`);
-                    setTimeout(() => attempt(), 2000);  // Wait 2s before retry
+
+                if (!timedOut && remaining > 0) {
+                    console.log(`Download error: ${err.message}, retrying... (${remaining} attempts left)`);
+                    setTimeout(() => attempt(remaining - 1), DOWNLOAD_RETRY_DELAY);
                 } else if (!timedOut) {
                     reject(err);
                 }
             });
         };
 
-        attempt();  // 👈 Mulai attempt pertama
+        attempt(retries);
     });
 }
 
@@ -481,50 +538,43 @@ async function updateYtDlp() {
  */
 async function checkForUpdate(retries = 2) {
     try {
-        // 👇 LANGKAH 1: CEK CACHE DULU
         const cache = readCache();
-        
+
         if (isCacheValid(cache)) {
             console.log("Using cached update check (still valid for 24h)");
-            
-            // Ambil versi yang terinstall saat ini
+
             let currentVersion = "unknown";
             try {
                 currentVersion = await getCurrentVersion();
             } catch (err) {
-                console.log("Could not determine current version");
+                console.log("Could not determine current version", err.message);
             }
-            
-            // Return hasil dari cache, tapi perbarui currentVersion
-            // karena versi terinstall bisa berubah setelah update manual
+
             return {
-                updateAvailable: currentVersion !== cache.latestVersion,
+                updateAvailable: currentVersion !== "unknown" && currentVersion !== cache.latestVersion,
                 currentVersion,
                 latestVersion: cache.latestVersion,
                 releaseDate: cache.releaseDate,
-                cached: true  // 👈 Tandai bahwa ini dari cache
+                cached: true
             };
         }
 
         console.log("Cache expired or not found, checking GitHub API...");
-        
-        // 👇 LANGKAH 2: CACHE TIDAK ADA/EXPIRED, HIT API
+
         let lastError = null;
-        
-        for (let i = 0; i <= retries; i++) {
+
+        for (let attempt = 0; attempt <= retries; attempt++) {
             try {
-                const latestInfo = await getLatestVersion();
-                let currentVersion = "unknown";
+                const [latestInfo, currentVersion] = await Promise.all([
+                    getLatestVersion(),
+                    getCurrentVersion().catch((err) => {
+                        console.log("Could not determine current version", err.message);
+                        return "unknown";
+                    })
+                ]);
 
-                try {
-                    currentVersion = await getCurrentVersion();
-                } catch (err) {
-                    console.log("Could not determine current version");
-                }
+                const updateAvailable = currentVersion !== "unknown" && currentVersion !== latestInfo.version;
 
-                const updateAvailable = currentVersion !== latestInfo.version;
-
-                // 👇 LANGKAH 3: SIMPAN HASIL KE CACHE UNTUK PENGGUNAAN NANTI
                 saveCache({
                     latestVersion: latestInfo.version,
                     releaseDate: latestInfo.releaseDate
@@ -535,15 +585,27 @@ async function checkForUpdate(retries = 2) {
                     currentVersion,
                     latestVersion: latestInfo.version,
                     releaseDate: latestInfo.releaseDate,
-                    cached: false  // 👈 Tandai bahwa ini fresh dari API
+                    cached: false
                 };
             } catch (err) {
                 lastError = err;
-                if (i < retries) {
-                    console.log(`Check update failed, retrying... (attempt ${i + 1}/${retries})`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                if (attempt < retries) {
+                    console.log(`Check update failed, retrying... (attempt ${attempt + 1}/${retries})`);
+                    await new Promise((resolve) => setTimeout(resolve, DOWNLOAD_RETRY_DELAY));
                 }
             }
+        }
+
+        if (cache) {
+            return {
+                updateAvailable: true,
+                currentVersion: "unknown",
+                latestVersion: cache.latestVersion,
+                releaseDate: cache.releaseDate,
+                cached: true,
+                stale: true,
+                error: lastError?.message || "Failed to check for update, using stale cache"
+            };
         }
 
         return {

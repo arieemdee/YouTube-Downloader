@@ -191,13 +191,13 @@
 
         #updateBtn {
             width: auto;
-            padding: 8px 15px;
+            padding: 5px 12px;
             margin-right: 10px;
         }
 
         #checkUpdateBtn {
             width: auto;
-            padding: 8px 15px;
+            padding: 5px 12px;
         }
 
         .cache-info {
@@ -521,6 +521,9 @@
                 // 👇 Tampilkan cache status
                 if (data.cached) {
                     cacheInfoDiv.textContent = '💾 Menggunakan cache (diperbarui dalam 24 jam terakhir) | ';
+                    if (data.stale) {
+                        cacheInfoDiv.textContent += '⚠️ Cache lama digunakan karena pengecekan GitHub gagal.';
+                    }
                     clearCacheBtn.style.display = 'inline-block';
                 } else {
                     cacheInfoDiv.textContent = '🔄 Baru di-check dari GitHub API';
