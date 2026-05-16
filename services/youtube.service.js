@@ -1,4 +1,4 @@
-const { exec } = require("child_process");
+const { spawn } = require("child_process");
 const path = require("path");
 
 const {
@@ -8,49 +8,63 @@ const {
 
 const ytDlpPath = path.join(YTDLP_DIR, "yt-dlp.exe");
 
-function getFormats(url) {
+function runYtDlp(args, timeoutMs = 30000) {
+    const child = spawn(ytDlpPath, args, {
+        cwd: YTDLP_DIR
+    });
 
-    return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
 
-        const command =
-            `"${ytDlpPath}" -F "${url}"`;
+    const timeout = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+    }, timeoutMs);
 
-        exec(command, {
-            cwd: YTDLP_DIR
-        }, (error, stdout, stderr) => {
+    const promise = new Promise((resolve, reject) => {
+        child.stdout.on("data", (data) => {
+            stdout += data.toString();
+        });
 
-            if (error) {
-                return reject(stderr);
+        child.stderr.on("data", (data) => {
+            stderr += data.toString();
+        });
+
+        child.on("error", (err) => {
+            clearTimeout(timeout);
+            reject(err.message || err);
+        });
+
+        child.on("close", (code, signal) => {
+            clearTimeout(timeout);
+
+            if (timedOut) {
+                return reject("Proses terlalu lama dan dibatalkan.");
+            }
+
+            if (signal) {
+                return reject(`Proses dibatalkan (${signal}).`);
+            }
+
+            if (code !== 0) {
+                return reject(stderr || `Perintah selesai dengan kode ${code}`);
             }
 
             resolve(stdout);
         });
-
     });
 
+    return { child, promise };
+}
+
+function getFormats(url) {
+    return runYtDlp(["-F", url], 30000);
 }
 
 function downloadVideo(url, format) {
-
-    return new Promise((resolve, reject) => {
-
-        const command =
-            `"${ytDlpPath}" -f ${format} -o "${OUTPUT_DIR}\\%(title)s.%(ext)s" "${url}"`;
-
-        exec(command, {
-            cwd: YTDLP_DIR
-        }, (error, stdout, stderr) => {
-
-            if (error) {
-                return reject(stderr);
-            }
-
-            resolve(stdout);
-
-        });
-
-    });
-
+    const output = path.join(OUTPUT_DIR, "%(title)s.%(ext)s");
+    return runYtDlp(["-f", format, "-o", output, url], 600000);
 }
 
 module.exports = {

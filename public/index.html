@@ -106,13 +106,23 @@
         }
 
         async function downloadVideo(){
+            const url = document.getElementById("url").value.trim();
+            const format = document.getElementById("format").value.trim();
+
+            if (!url) {
+                document.getElementById("result").textContent = "❌ URL tidak boleh kosong!";
+                return;
+            }
+
+            if (!format) {
+                document.getElementById("result").textContent = "❌ Format tidak boleh kosong!";
+                return;
+            }
+
             downloadBtn.disabled = true;
             downloadBtn.textContent = "Downloading...";
 
             try {
-                const url = document.getElementById("url").value;
-                const format = document.getElementById("format").value;
-
                 const res = await fetch("/api/download", {
                     method:"POST",
                     headers:{
@@ -123,6 +133,14 @@
 
                 const text = await res.text();
                 document.getElementById("result").textContent = text;
+
+                // Reset form setelah download selesai
+                if (text.includes("✅")) {
+                    setTimeout(() => {
+                        document.getElementById("format").value = "";
+                        document.getElementById("result").textContent = "";
+                    }, 2000);
+                }
             } catch (err) {
                 document.getElementById("result").textContent = "Terjadi kesalahan saat mengunduh.";
             } finally {
