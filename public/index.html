@@ -40,6 +40,21 @@
             white-space:pre-wrap;
         }
 
+        .format-id {
+            cursor: pointer;
+            color: #6f6;
+            font-weight: bold;
+            padding: 2px 4px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .format-id:hover {
+            background: #1a1a1a;
+            color: #0f0;
+            text-shadow: 0 0 5px #0f0;
+        }
+
         /* Progress bar */
         .progress-wrap{
             width:400px;
@@ -171,13 +186,36 @@
                 });
 
                 const text = await res.text();
-                formatsPre.textContent = text;
+                // Parse and make format IDs clickable
+                const htmlContent = makeFormatIdsClickable(text);
+                formatsPre.innerHTML = htmlContent;
             } catch (err) {
                 formatsPre.textContent = "Terjadi kesalahan saat memeriksa format.";
             } finally {
                 checkFormatBtn.disabled = false;
                 checkFormatBtn.textContent = "Cek Format";
             }
+        }
+
+        function makeFormatIdsClickable(text) {
+            // Replace format IDs (dapat berupa angka, huruf, underscore, dash)
+            // Matches: 136, 137_2, abc123, atau kombinasi dengan + (e.g., 136+140, 137_2+140, dll)
+            return text.replace(/\b([a-zA-Z0-9_-]+(?:\+[a-zA-Z0-9_-]+)*)\b/g, (match) => {
+                return `<span class="format-id" onclick="selectFormat('${match}')" title="Klik untuk memilih">${match}</span>`;
+            });
+        }
+
+        function selectFormat(formatId) {
+            const currentValue = formatInput.value.trim();
+            
+            // Jika input sudah ada, tambahkan dengan "+"
+            if (currentValue && !currentValue.endsWith('+')) {
+                formatInput.value = currentValue + '+' + formatId;
+            } else {
+                formatInput.value = formatId;
+            }
+            
+            formatInput.focus();
         }
 
         async function downloadVideo(){
