@@ -86,12 +86,86 @@
             font-size:12px;
         }
 
+        /* Update section */
+        .update-section {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #0a0a0a;
+        }
+
+        .update-status {
+            display: none;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .update-status.checking {
+            display: block;
+            background: #1a1a1a;
+            color: #0f0;
+            border: 1px solid #0f0;
+        }
+
+        .update-status.available {
+            display: block;
+            background: #2a1a0a;
+            color: #fa0;
+            border: 1px solid #fa0;
+        }
+
+        .update-status.latest {
+            display: block;
+            background: #0a1a0a;
+            color: #0a0;
+            border: 1px solid #0a0;
+        }
+
+        .update-status.updating {
+            display: block;
+            background: #1a1a2a;
+            color: #0af;
+            border: 1px solid #0af;
+        }
+
+        .update-status.error {
+            display: block;
+            background: #2a0a0a;
+            color: #f00;
+            border: 1px solid #f00;
+        }
+
+        #updateBtn {
+            width: auto;
+            padding: 8px 15px;
+            margin-right: 10px;
+        }
+
+        #checkUpdateBtn {
+            width: auto;
+            padding: 8px 15px;
+        }
+
     </style>
 
 </head>
 <body>
 
     <h1>🎬 YouTube Downloader</h1>
+
+    <!-- Update Section -->
+    <div class="update-section">
+        <div id="updateStatus" class="update-status"></div>
+        <button id="checkUpdateBtn" onclick="checkUpdate()">
+            🔄 Cek Update
+        </button>
+        <button id="updateBtn" onclick="performUpdate()" style="display:none;">
+            📥 Update Sekarang
+        </button>
+    </div>
 
     <input
         type="text"
@@ -336,6 +410,100 @@
                 downloadBtn.textContent = "Download";
             };
         }
+
+        // ======= UPDATE FUNCTIONS =======
+        async function checkUpdate() {
+            const checkBtn = document.getElementById('checkUpdateBtn');
+            const updateBtn = document.getElementById('updateBtn');
+            const statusDiv = document.getElementById('updateStatus');
+
+            checkBtn.disabled = true;
+            updateBtn.style.display = 'none';
+            statusDiv.className = 'update-status checking';
+            statusDiv.textContent = '🔄 Memeriksa update...';
+
+            try {
+                const res = await fetch('/api/check-update');
+                const data = await res.json();
+
+                if (data.error) {
+                    statusDiv.className = 'update-status error';
+                    statusDiv.textContent = '❌ Error: ' + data.error;
+                    return;
+                }
+
+                if (data.updateAvailable) {
+                    statusDiv.className = 'update-status available';
+                    statusDiv.textContent = `⚠️ Update tersedia! Versi saat ini: ${data.currentVersion} → ${data.latestVersion}`;
+                    updateBtn.style.display = 'inline-block';
+                } else {
+                    statusDiv.className = 'update-status latest';
+                    statusDiv.textContent = `✅ Sudah versi terbaru: ${data.currentVersion}`;
+                }
+            } catch (err) {
+                statusDiv.className = 'update-status error';
+                statusDiv.textContent = '❌ Error: ' + err.message;
+            } finally {
+                checkBtn.disabled = false;
+            }
+        }
+
+        async function performUpdate() {
+            const updateBtn = document.getElementById('updateBtn');
+            const statusDiv = document.getElementById('updateStatus');
+
+            // Confirmation dialog
+            const confirmed = confirm(
+                '⚠️ PERHATIAN!\n\n' +
+                'Update akan mengunduh versi terbaru yt-dlp dan mengganti file yang ada.\n\n' +
+                'Proses ini mungkin memakan waktu beberapa menit.\n\n' +
+                'Lanjutkan?'
+            );
+
+            if (!confirmed) {
+                statusDiv.className = 'update-status';
+                statusDiv.textContent = '';
+                return;
+            }
+
+            updateBtn.disabled = true;
+            statusDiv.className = 'update-status updating';
+            statusDiv.textContent = '📥 Sedang update... Mohon tunggu, jangan tutup aplikasi!';
+
+            try {
+                const res = await fetch('/api/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    statusDiv.className = 'update-status latest';
+                    statusDiv.textContent = `✅ ${data.message}`;
+                    updateBtn.style.display = 'none';
+                } else if (data.status === 'already_latest') {
+                    statusDiv.className = 'update-status latest';
+                    statusDiv.textContent = `✅ ${data.message}`;
+                    updateBtn.style.display = 'none';
+                } else {
+                    statusDiv.className = 'update-status error';
+                    statusDiv.textContent = `❌ Update gagal: ${data.message}`;
+                }
+            } catch (err) {
+                statusDiv.className = 'update-status error';
+                statusDiv.textContent = '❌ Error: ' + err.message;
+            } finally {
+                updateBtn.disabled = false;
+            }
+        }
+
+        // Auto-check for update on page load
+        window.addEventListener('load', () => {
+            checkUpdate();
+        });
 
     </script>
 

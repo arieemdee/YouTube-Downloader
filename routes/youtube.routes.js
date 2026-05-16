@@ -19,6 +19,11 @@ const {
     downloadVideo
 } = require("../services/youtube.service");
 
+const {
+    updateYtDlp,
+    checkForUpdate
+} = require("../services/update.service");
+
 router.post("/formats", async (req, res) => {
     const { url } = req.body;
     const { child, promise } = getFormats(url);
@@ -177,6 +182,31 @@ router.post('/download-cancel', (req, res) => {
         return res.json({ ok: true });
     } catch (err) {
         return res.status(500).json({ ok: false, error: err && err.toString ? err.toString() : 'Error' });
+    }
+});
+
+// Check for yt-dlp update
+router.get('/check-update', async (req, res) => {
+    try {
+        const result = await checkForUpdate();
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({
+            error: err.message || 'Failed to check for update'
+        });
+    }
+});
+
+// Update yt-dlp to latest version
+router.post('/update', async (req, res) => {
+    try {
+        const result = await updateYtDlp();
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({
+            status: 'error',
+            error: err.message || 'Failed to update yt-dlp'
+        });
     }
 });
 
