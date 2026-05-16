@@ -27,6 +27,12 @@
             font-weight:bold;
         }
 
+        button:disabled{
+            background:#444;
+            color:#999;
+            cursor:not-allowed;
+        }
+
         pre{
             background:#000;
             padding:15px;
@@ -49,7 +55,7 @@
 
     <br>
 
-    <button onclick="getFormats()">
+    <button id="checkFormatBtn" onclick="getFormats()">
         Cek Format
     </button>
 
@@ -63,7 +69,7 @@
 
     <br>
 
-    <button onclick="downloadVideo()">
+    <button id="downloadBtn" onclick="downloadVideo()">
         Download
     </button>
 
@@ -71,58 +77,58 @@
 
     <script>
 
+        const checkFormatBtn = document.getElementById("checkFormatBtn");
+        const downloadBtn = document.getElementById("downloadBtn");
+
         async function getFormats(){
+            checkFormatBtn.disabled = true;
+            checkFormatBtn.textContent = "Memeriksa...";
 
-            const url =
-                document.getElementById("url").value;
+            try {
+                const url = document.getElementById("url").value;
 
-            const res = await fetch("/api/formats", {
+                const res = await fetch("/api/formats", {
+                    method:"POST",
+                    headers:{
+                        "Content-Type":"application/json"
+                    },
+                    body: JSON.stringify({ url })
+                });
 
-                method:"POST",
-
-                headers:{
-                    "Content-Type":"application/json"
-                },
-
-                body: JSON.stringify({ url })
-
-            });
-
-            const text = await res.text();
-
-            document.getElementById("formats")
-                .textContent = text;
-
+                const text = await res.text();
+                document.getElementById("formats").textContent = text;
+            } catch (err) {
+                document.getElementById("formats").textContent = "Terjadi kesalahan saat memeriksa format.";
+            } finally {
+                checkFormatBtn.disabled = false;
+                checkFormatBtn.textContent = "Cek Format";
+            }
         }
 
         async function downloadVideo(){
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = "Downloading...";
 
-            const url =
-                document.getElementById("url").value;
+            try {
+                const url = document.getElementById("url").value;
+                const format = document.getElementById("format").value;
 
-            const format =
-                document.getElementById("format").value;
+                const res = await fetch("/api/download", {
+                    method:"POST",
+                    headers:{
+                        "Content-Type":"application/json"
+                    },
+                    body: JSON.stringify({ url, format })
+                });
 
-            const res = await fetch("/api/download", {
-
-                method:"POST",
-
-                headers:{
-                    "Content-Type":"application/json"
-                },
-
-                body: JSON.stringify({
-                    url,
-                    format
-                })
-
-            });
-
-            const text = await res.text();
-
-            document.getElementById("result")
-                .textContent = text;
-
+                const text = await res.text();
+                document.getElementById("result").textContent = text;
+            } catch (err) {
+                document.getElementById("result").textContent = "Terjadi kesalahan saat mengunduh.";
+            } finally {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = "Download";
+            }
         }
 
     </script>
