@@ -40,6 +40,37 @@
             white-space:pre-wrap;
         }
 
+        /* Progress bar */
+        .progress-wrap{
+            width:400px;
+            background:#111;
+            border:1px solid #333;
+            padding:6px;
+            margin:8px 0;
+            display:none;
+        }
+
+        .progress{
+            width:100%;
+            height:18px;
+            background:#222;
+            border-radius:4px;
+            overflow:hidden;
+        }
+
+        .progress-bar{
+            height:100%;
+            width:0%;
+            background:linear-gradient(90deg,#0f0,#6f6);
+            transition: width 200ms linear;
+        }
+
+        .progress-text{
+            margin-top:6px;
+            color:#0f0;
+            font-size:12px;
+        }
+
     </style>
 
 </head>
@@ -72,8 +103,16 @@
     <button id="downloadBtn" onclick="downloadVideo()">
         Download
     </button>
+    <button id="cancelBtn" style="display:none;" onclick="cancelDownload()">Cancel</button>
 
     <pre id="result"></pre>
+
+    <div class="progress-wrap" id="progressWrap">
+        <div class="progress" aria-hidden="true">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div class="progress-text" id="progressText">0%</div>
+    </div>
 
     <script>
 
@@ -126,12 +165,39 @@
             // Use EventSource (SSE) to receive real-time progress
             const params = new URLSearchParams({ url, format });
             const es = new EventSource(`/api/download-stream?${params.toString()}`);
+            let currentDownloadId = null;
+
+            const cancelBtn = document.getElementById('cancelBtn');
+            cancelBtn.style.display = 'inline-block';
+            cancelBtn.disabled = false;
+
+            const progressWrap = document.getElementById('progressWrap');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+
+            progressWrap.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
 
             es.onmessage = (e) => {
                 const pre = document.getElementById("result");
                 pre.textContent += e.data + "\n";
                 pre.scrollTop = pre.scrollHeight;
             };
+
+            es.addEventListener('progress', (e) => {
+                const pct = parseFloat(e.data);
+                if (!Number.isNaN(pct)) {
+                    const pctSafe = Math.max(0, Math.min(100, pct));
+                    progressBar.style.width = pctSafe + '%';
+                    progressText.textContent = pctSafe.toFixed(1) + '%';
+                }
+            });
+
+            es.addEventListener('id', (e) => {
+                // server provides the generated download id
+                currentDownloadId = e.data;
+            });
 
             es.addEventListener('done', (e) => {
                 const pre = document.getElementById("result");
@@ -140,6 +206,9 @@
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
                 document.getElementById("format").value = "";
+                cancelBtn.style.display = 'none';
+                // hide progress after brief pause
+                setTimeout(() => { progressWrap.style.display = 'none'; }, 800);
             });
 
             es.addEventListener('error', (e) => {
@@ -148,7 +217,39 @@
                 es.close();
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
+                // hide progress after error
+                cancelBtn.style.display = 'none';
+                setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
             });
+
+            // cancel handler function available globally
+            window.cancelDownload = async function () {
+                if (!currentDownloadId) return;
+                try {
+                    cancelBtn.disabled = true;
+                    const res = await fetch('/api/download-cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: currentDownloadId })
+                    });
+                    const json = await res.json();
+                    const pre = document.getElementById('result');
+                    if (json && json.ok) {
+                        pre.textContent += '\n⚠️ Download dibatalkan oleh pengguna.\n';
+                    } else {
+                        pre.textContent += '\n⚠️ Gagal membatalkan download.\n';
+                    }
+                } catch (err) {
+                    const pre = document.getElementById('result');
+                    pre.textContent += '\n⚠️ Error saat membatalkan.\n';
+                } finally {
+                    try { es.close(); } catch (e) {}
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = 'Download';
+                    cancelBtn.style.display = 'none';
+                    progressWrap.style.display = 'none';
+                }
+            };
 
             // If the EventSource cannot connect, show an error
             es.onerror = (err) => {
