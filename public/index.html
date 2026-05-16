@@ -104,6 +104,7 @@
         Download
     </button>
     <button id="cancelBtn" style="display:none;" onclick="cancelDownload()">Cancel</button>
+    <button id="retryBtn" style="display:none;" onclick="retryDownload()">Retry</button>
 
     <pre id="result"></pre>
 
@@ -168,8 +169,10 @@
             let currentDownloadId = null;
 
             const cancelBtn = document.getElementById('cancelBtn');
+            const retryBtn = document.getElementById('retryBtn');
             cancelBtn.style.display = 'inline-block';
             cancelBtn.disabled = false;
+            retryBtn.style.display = 'none';
 
             const progressWrap = document.getElementById('progressWrap');
             const progressBar = document.getElementById('progressBar');
@@ -219,6 +222,8 @@
                 downloadBtn.textContent = "Download";
                 // hide progress after error
                 cancelBtn.style.display = 'none';
+                // show retry option
+                retryBtn.style.display = 'inline-block';
                 setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
             });
 
@@ -247,8 +252,17 @@
                     downloadBtn.disabled = false;
                     downloadBtn.textContent = 'Download';
                     cancelBtn.style.display = 'none';
+                    retryBtn.style.display = 'inline-block';
                     progressWrap.style.display = 'none';
                 }
+            };
+
+            // retry handler to re-run download with same inputs
+            window.retryDownload = function () {
+                const retryBtn = document.getElementById('retryBtn');
+                retryBtn.style.display = 'none';
+                // re-trigger download using current input values
+                downloadVideo();
             };
 
             // If the EventSource cannot connect, show an error

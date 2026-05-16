@@ -62,9 +62,18 @@ function getFormats(url) {
     return runYtDlp(["-F", url], 30000);
 }
 
-function downloadVideo(url, format) {
+function downloadVideo(url, format, opts = {}) {
     const output = path.join(OUTPUT_DIR, "%(title)s.%(ext)s");
-    return runYtDlp(["-f", format, "-o", output, url], 600000);
+    const args = [];
+
+    // allow resuming partial downloads by default; pass { resume: false } to disable
+    if (opts.resume !== false) {
+        args.push('-c');
+    }
+
+    args.push('-f', format, '-o', output, url);
+
+    return runYtDlp(args, opts.timeoutMs || 600000);
 }
 
 module.exports = {

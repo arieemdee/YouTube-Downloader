@@ -42,11 +42,7 @@ router.post("/download", async (req, res) => {
     const { url, format } = req.body;
     const { child, promise } = downloadVideo(url, format);
 
-    // generate a short id for this download and store the child
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    downloads.set(id, { child });
-    // send the id to the client so it can request cancellation
-    res.write(`event: id\ndata: ${id}\n\n`);
+    
 
     const onAbort = () => {
         if (child && !child.killed) {
@@ -85,11 +81,18 @@ router.get("/download-stream", (req, res) => {
 
     const { child, promise } = downloadVideo(url, format);
 
+    // create and expose an id for this download so clients can cancel
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    downloads.set(id, { child });
+
     res.set({
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
     });
+
+    // send initial id event
+    res.write(`event: id\ndata: ${id}\n\n`);
 
     // helper to parse progress and send SSE events
     const parseAndSend = (chunk) => {
@@ -117,6 +120,8 @@ router.get("/download-stream", (req, res) => {
 
     const onCloseReq = () => {
         if (child && !child.killed) child.kill("SIGTERM");
+        // remove from downloads map if client closes connection
+        try { downloads.delete(id); } catch (e) {}
     };
 
     req.on("close", onCloseReq);
