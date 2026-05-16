@@ -133,21 +133,26 @@
         if (urlInput) {
           urlInput.addEventListener('focus', e => e.target.select());
           urlInput.addEventListener('mouseup', e => e.preventDefault());
-          urlInput.addEventListener('keydown', e => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              getFormats();
-            }
-          });
+        }
+
+        function handleEnterKey(e) {
+          const isEnter = e.key === 'Enter' || e.code === 'Enter';
+          if (!isEnter) return;
+          e.preventDefault();
+
+          if (document.activeElement === urlInput) {
+            getFormats();
+          } else if (document.activeElement === formatInput) {
+            downloadVideo();
+          }
+        }
+
+        if (urlInput) {
+          urlInput.addEventListener('keydown', handleEnterKey);
         }
 
         if (formatInput) {
-          formatInput.addEventListener('keydown', e => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              downloadVideo();
-            }
-          });
+          formatInput.addEventListener('keydown', handleEnterKey);
         }
 
         async function getFormats(){
