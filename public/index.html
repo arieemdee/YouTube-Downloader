@@ -121,32 +121,45 @@
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = "Downloading...";
+            document.getElementById("result").textContent = "";
 
-            try {
-                const res = await fetch("/api/download", {
-                    method:"POST",
-                    headers:{
-                        "Content-Type":"application/json"
-                    },
-                    body: JSON.stringify({ url, format })
-                });
+            // Use EventSource (SSE) to receive real-time progress
+            const params = new URLSearchParams({ url, format });
+            const es = new EventSource(`/api/download-stream?${params.toString()}`);
 
-                const text = await res.text();
-                document.getElementById("result").textContent = text;
+            es.onmessage = (e) => {
+                const pre = document.getElementById("result");
+                pre.textContent += e.data + "\n";
+                pre.scrollTop = pre.scrollHeight;
+            };
 
-                // Reset form setelah download selesai
-                if (text.includes("✅")) {
-                    setTimeout(() => {
-                        document.getElementById("format").value = "";
-                        document.getElementById("result").textContent = "";
-                    }, 2000);
-                }
-            } catch (err) {
-                document.getElementById("result").textContent = "Terjadi kesalahan saat mengunduh.";
-            } finally {
+            es.addEventListener('done', (e) => {
+                const pre = document.getElementById("result");
+                pre.textContent += '\n✅ Selesai.\n';
+                es.close();
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
-            }
+                document.getElementById("format").value = "";
+            });
+
+            es.addEventListener('error', (e) => {
+                const pre = document.getElementById("result");
+                pre.textContent += '\n❌ Terjadi kesalahan saat mengunduh.\n';
+                es.close();
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = "Download";
+            });
+
+            // If the EventSource cannot connect, show an error
+            es.onerror = (err) => {
+                // if readyState is CLOSED (2), connection was closed normally
+                if (es.readyState === EventSource.CLOSED) return;
+                const pre = document.getElementById("result");
+                pre.textContent += '\n❌ Koneksi terputus.\n';
+                es.close();
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = "Download";
+            };
         }
 
     </script>
