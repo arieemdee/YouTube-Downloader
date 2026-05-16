@@ -1,0 +1,25 @@
+{
+  "name": "youtube-gui",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "bin": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "pkg": {
+    "targets": [
+      "node20-win-x64"
+    ],
+    "assets": [
+      "public/**/*",
+      "config/**/*"
+    ]
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

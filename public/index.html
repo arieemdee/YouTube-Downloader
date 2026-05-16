@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <title>YouTube Downloader</title>
+
+    <style>
+
+        body{
+            font-family: Arial;
+            background:#111;
+            color:#0f0;
+            padding:40px;
+        }
+
+        input, button{
+            padding:10px;
+            margin:5px;
+            width:400px;
+        }
+
+        button{
+            background:#0f0;
+            color:#000;
+            border:none;
+            cursor:pointer;
+            font-weight:bold;
+        }
+
+        pre{
+            background:#000;
+            padding:15px;
+            overflow:auto;
+            white-space:pre-wrap;
+        }
+
+    </style>
+
+</head>
+<body>
+
+    <h1>🎬 YouTube Downloader</h1>
+
+    <input
+        type="text"
+        id="url"
+        placeholder="Masukkan URL YouTube"
+    >
+
+    <br>
+
+    <button onclick="getFormats()">
+        Cek Format
+    </button>
+
+    <pre id="formats"></pre>
+
+    <input
+        type="text"
+        id="format"
+        placeholder="Contoh: 136+140"
+    >
+
+    <br>
+
+    <button onclick="downloadVideo()">
+        Download
+    </button>
+
+    <pre id="result"></pre>
+
+    <script>
+
+        async function getFormats(){
+
+            const url =
+                document.getElementById("url").value;
+
+            const res = await fetch("/api/formats", {
+
+                method:"POST",
+
+                headers:{
+                    "Content-Type":"application/json"
+                },
+
+                body: JSON.stringify({ url })
+
+            });
+
+            const text = await res.text();
+
+            document.getElementById("formats")
+                .textContent = text;
+
+        }
+
+        async function downloadVideo(){
+
+            const url =
+                document.getElementById("url").value;
+
+            const format =
+                document.getElementById("format").value;
+
+            const res = await fetch("/api/download", {
+
+                method:"POST",
+
+                headers:{
+                    "Content-Type":"application/json"
+                },
+
+                body: JSON.stringify({
+                    url,
+                    format
+                })
+
+            });
+
+            const text = await res.text();
+
+            document.getElementById("result")
+                .textContent = text;
+
+        }
+
+    </script>
+
+</body>
+</html>
