@@ -10,9 +10,9 @@ const configPath = path.join(BASE_DIR, "config", "config.json");
 const defaultConfig = {
     PORT: 3000,
     YTDLP_DIR: "./bin",
-    OUTPUT_DIR: "./downloads"
+    OUTPUT_DIR: "./downloads",
+    OUTPUT_MOVE: ""
 };
-
 // Auto create config
 if (!fs.existsSync(configPath)) {
 
@@ -34,5 +34,6 @@ module.exports = {
     BASE_DIR,
     config,
     YTDLP_DIR: path.join(BASE_DIR, config.YTDLP_DIR),
-    OUTPUT_DIR: path.join(BASE_DIR, config.OUTPUT_DIR)
+    OUTPUT_DIR: path.join(BASE_DIR, config.OUTPUT_DIR),
+    OUTPUT_MOVE: config.OUTPUT_MOVE || ""
 };

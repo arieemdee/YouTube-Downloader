@@ -256,6 +256,12 @@
     <button id="cancelBtn" style="display:none;" onclick="cancelDownload()">Cancel</button>
     <button id="retryBtn" style="display:none;" onclick="retryDownload()">Retry</button>
 
+    <div style="margin-top:10px;">
+        <button id="moveFilesBtn" onclick="moveDownloadedFiles()" disabled style="width:320px;">
+            Pindah hasil download (0)
+        </button>
+    </div>
+
     <div class="progress-wrap" id="progressWrap">
         <div class="progress" aria-hidden="true">
             <div id="progressBar" class="progress-bar"></div>
@@ -432,6 +438,7 @@
                 downloadBtn.textContent = "Download";
                 formatInput.value = "";
                 cancelBtn.style.display = 'none';
+                refreshDownloadStatus();
                 // hide progress after brief pause
                 setTimeout(() => { progressWrap.style.display = 'none'; }, 800);
             });
@@ -445,6 +452,7 @@
                 cancelBtn.style.display = 'none';
                 // show retry option
                 retryBtn.style.display = 'inline-block';
+                refreshDownloadStatus();
                 setTimeout(() => { progressWrap.style.display = 'none'; }, 1500);
             });
 
@@ -492,6 +500,48 @@
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = "Download";
             };
+        }
+
+        async function refreshDownloadStatus() {
+            const moveFilesBtn = document.getElementById('moveFilesBtn');
+
+            try {
+                const res = await fetch('/api/download-status');
+                const data = await res.json();
+                const count = Number(data.count || 0);
+                moveFilesBtn.disabled = count <= 0;
+                moveFilesBtn.textContent = `Pindah hasil download (${count})`;
+            } catch (err) {
+                moveFilesBtn.disabled = true;
+                moveFilesBtn.textContent = 'Pindah hasil download (error)';
+            }
+        }
+
+        async function moveDownloadedFiles() {
+            const moveFilesBtn = document.getElementById('moveFilesBtn');
+
+            moveFilesBtn.disabled = true;
+            moveFilesBtn.textContent = 'Memindahkan...';
+            resultPre.textContent = '';
+
+            try {
+                const res = await fetch('/api/move-downloads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    resultPre.textContent = `✅ Dipindah ${data.moved} file ke:\n${data.destination}`;
+                } else {
+                    resultPre.textContent = `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
+                }
+            } catch (err) {
+                resultPre.textContent = `❌ Gagal memindahkan: ${err.message || err}`;
+            } finally {
+                await refreshDownloadStatus();
+            }
         }
 
         // ======= UPDATE FUNCTIONS =======
@@ -634,9 +684,10 @@
             }
         }
 
-        // Auto-check for update on page load
+        // Auto-check for update and refresh download status on page load
         window.addEventListener('load', () => {
             checkUpdate();
+            refreshDownloadStatus();
         });
 
     </script>

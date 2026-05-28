@@ -25,6 +25,13 @@ const {
     clearUpdateCache
 } = require("../services/update.service");
 
+const {
+    getDownloadFileCount,
+    moveDownloads
+} = require("../services/download.service");
+
+const { OUTPUT_MOVE } = require("../utils/paths");
+
 router.post("/formats", async (req, res) => {
     const { url } = req.body;
     const { child, promise } = getFormats(url);
@@ -183,6 +190,43 @@ router.post('/download-cancel', (req, res) => {
         return res.json({ ok: true });
     } catch (err) {
         return res.status(500).json({ ok: false, error: err && err.toString ? err.toString() : 'Error' });
+    }
+});
+
+// Download status: jumlah file di OUTPUT_DIR
+router.get('/download-status', async (req, res) => {
+    try {
+        const count = await getDownloadFileCount();
+        res.json({ count, destination: OUTPUT_MOVE });
+    } catch (err) {
+        res.status(500).json({
+            error: err.message || 'Failed to read download status'
+        });
+    }
+});
+
+// Move downloaded files from OUTPUT_DIR to destination path
+router.post('/move-downloads', async (req, res) => {
+    try {
+        const { destination } = req.body || {};
+        const target = destination || OUTPUT_MOVE;
+
+        if (!target) {
+            return res.status(400).json({ error: 'Missing destination path in request or config' });
+        }
+
+        const result = await moveDownloads(target);
+        res.json({
+            status: 'success',
+            moved: result.moved,
+            files: result.files,
+            destination: result.destination
+        });
+    } catch (err) {
+        res.status(500).json({
+            status: 'error',
+            error: err.message || 'Failed to move downloads'
+        });
     }
 });
 

@@ -1,5 +1,6 @@
 {
   "PORT": 3000,
   "YTDLP_DIR": "./bin",
-  "OUTPUT_DIR": "./downloads"
+  "OUTPUT_DIR": "./downloads",
+  "OUTPUT_MOVE": "\\\\Ariyanto\\temp"
 }
