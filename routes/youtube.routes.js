@@ -205,6 +205,41 @@ router.get('/download-status', async (req, res) => {
     }
 });
 
+// Stream move progress in real time while moving files
+router.get('/move-downloads-stream', async (req, res) => {
+    try {
+        const target = req.query.destination || OUTPUT_MOVE;
+
+        if (!target) {
+            return res.status(400).json({ error: 'Missing destination path in request or config' });
+        }
+
+        res.set({
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive'
+        });
+
+        const result = await moveDownloads(target, (info) => {
+            res.write(`event: progress\ndata: ${JSON.stringify(info)}\n\n`);
+        });
+
+        res.write(`event: done\ndata: ${JSON.stringify({
+            status: 'success',
+            moved: result.moved,
+            files: result.files,
+            destination: result.destination
+        })}\n\n`);
+    } catch (err) {
+        res.write(`event: error\ndata: ${JSON.stringify({
+            status: 'error',
+            error: err.message || 'Failed to move downloads'
+        })}\n\n`);
+    } finally {
+        res.end();
+    }
+});
+
 // Move downloaded files from OUTPUT_DIR to destination path
 router.post('/move-downloads', async (req, res) => {
     try {

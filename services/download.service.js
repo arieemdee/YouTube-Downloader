@@ -35,7 +35,7 @@ async function moveFile(srcPath, destPath) {
     }
 }
 
-async function moveDownloads(destination) {
+async function moveDownloads(destination, onProgress = null) {
     if (!destination || typeof destination !== "string") {
         throw new Error("Destination path tidak valid.");
     }
@@ -56,11 +56,24 @@ async function moveDownloads(destination) {
     await fs.mkdir(trimmedDestination, { recursive: true });
 
     const movedFiles = [];
-    for (const filename of files) {
+    for (let index = 0; index < files.length; index += 1) {
+        const filename = files[index];
         const src = path.join(OUTPUT_DIR, filename);
         const dest = path.join(trimmedDestination, filename);
         await moveFile(src, dest);
         movedFiles.push(filename);
+
+        if (typeof onProgress === "function") {
+            const completed = movedFiles.length;
+            const percent = files.length ? Math.round((completed / files.length) * 100) : 100;
+            onProgress({
+                completed,
+                total: files.length,
+                filename,
+                percent,
+                destination: trimmedDestination
+            });
+        }
     }
 
     return {

@@ -523,25 +523,65 @@
             moveFilesBtn.disabled = true;
             moveFilesBtn.textContent = 'Memindahkan...';
             resultPre.textContent = '';
+            progressWrap.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
 
-            try {
-                const res = await fetch('/api/move-downloads', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                });
-                const data = await res.json();
+            const es = new EventSource('/api/move-downloads-stream');
 
-                if (data.status === 'success') {
-                    resultPre.textContent = `✅ Dipindah ${data.moved} file ke:\n${data.destination}`;
-                } else {
-                    resultPre.textContent = `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
+            es.addEventListener('progress', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    const pct = Number.isFinite(data.percent) ? Math.max(0, Math.min(100, data.percent)) : 0;
+                    progressBar.style.width = pct + '%';
+                    progressText.textContent = `${pct}% (${data.completed || 0}/${data.total || 0})`;
+                    resultPre.textContent = `📦 Memindahkan ${data.filename || 'file'} (${data.completed || 0}/${data.total || 0})...`;
+                    resultPre.scrollTop = resultPre.scrollHeight;
+                } catch (err) {
+                    // ignore parse errors
                 }
-            } catch (err) {
-                resultPre.textContent = `❌ Gagal memindahkan: ${err.message || err}`;
-            } finally {
-                await refreshDownloadStatus();
-            }
+            });
+
+            es.addEventListener('done', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.status === 'success') {
+                        resultPre.textContent = `✅ Dipindah ${data.moved} file ke:\n${data.destination}`;
+                    } else {
+                        resultPre.textContent = `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
+                    }
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '100%';
+                } catch (err) {
+                    resultPre.textContent = '❌ Gagal memindahkan file.';
+                }
+                es.close();
+                refreshDownloadStatus().finally(() => {
+                    setTimeout(() => {
+                        progressWrap.style.display = 'none';
+                    }, 800);
+                });
+            });
+
+            es.addEventListener('error', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    resultPre.textContent = `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
+                } catch (err) {
+                    resultPre.textContent = '❌ Gagal memindahkan file.';
+                }
+                es.close();
+                refreshDownloadStatus().finally(() => {
+                    setTimeout(() => {
+                        progressWrap.style.display = 'none';
+                    }, 1200);
+                });
+            });
+
+            es.onerror = () => {
+                if (es.readyState === EventSource.CLOSED) return;
+                es.close();
+            };
         }
 
         // ======= UPDATE FUNCTIONS =======
