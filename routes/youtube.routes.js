@@ -1,4 +1,5 @@
 const express = require("express");
+const { spawn } = require("child_process");
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ const {
     moveDownloads
 } = require("../services/download.service");
 
-const { OUTPUT_MOVE } = require("../utils/paths");
+const { OUTPUT_MOVE, loadConfig, saveConfig } = require("../utils/paths");
 
 router.post("/formats", async (req, res) => {
     const { url } = req.body;
@@ -193,11 +194,55 @@ router.post('/download-cancel', (req, res) => {
     }
 });
 
+// Pick a local folder path using Windows FolderBrowserDialog
+router.get('/select-folder', (req, res) => {
+    const command = [
+        "Add-Type -AssemblyName System.Windows.Forms;",
+        "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog;",
+        "$dialog.Description = 'Pilih folder tujuan hasil download';",
+        "$dialog.SelectedPath = [Environment]::GetFolderPath('Desktop');",
+        "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.SelectedPath } else { '' }"
+    ].join(" ");
+
+    const child = spawn("powershell.exe", ["-NoProfile", "-Command", command], {
+        windowsHide: true
+    });
+
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk.toString(); });
+    child.stderr.on("data", () => {});
+
+    child.on("close", (code) => {
+        const selected = output.trim();
+        res.json({ ok: code === 0, path: selected || "" });
+    });
+});
+
+// Save selected destination into config.json
+router.post('/save-output-move', (req, res) => {
+    try {
+        const { destination } = req.body || {};
+        if (!destination || typeof destination !== 'string' || !destination.trim()) {
+            return res.status(400).json({ ok: false, error: 'Destination path tidak valid.' });
+        }
+
+        const trimmed = destination.trim();
+        const config = loadConfig();
+        config.OUTPUT_MOVE = trimmed;
+        saveConfig(config);
+
+        return res.json({ ok: true, destination: trimmed });
+    } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || 'Gagal menyimpan CONFIG.' });
+    }
+});
+
 // Download status: jumlah file di OUTPUT_DIR
 router.get('/download-status', async (req, res) => {
     try {
         const count = await getDownloadFileCount();
-        res.json({ count, destination: OUTPUT_MOVE });
+        const config = loadConfig();
+        res.json({ count, destination: config.OUTPUT_MOVE || OUTPUT_MOVE });
     } catch (err) {
         res.status(500).json({
             error: err.message || 'Failed to read download status'
@@ -208,7 +253,8 @@ router.get('/download-status', async (req, res) => {
 // Stream move progress in real time while moving files
 router.get('/move-downloads-stream', async (req, res) => {
     try {
-        const target = req.query.destination || OUTPUT_MOVE;
+        const config = loadConfig();
+        const target = req.query.destination || config.OUTPUT_MOVE || OUTPUT_MOVE;
 
         if (!target) {
             return res.status(400).json({ error: 'Missing destination path in request or config' });
@@ -244,7 +290,8 @@ router.get('/move-downloads-stream', async (req, res) => {
 router.post('/move-downloads', async (req, res) => {
     try {
         const { destination } = req.body || {};
-        const target = destination || OUTPUT_MOVE;
+        const config = loadConfig();
+        const target = destination || config.OUTPUT_MOVE || OUTPUT_MOVE;
 
         if (!target) {
             return res.status(400).json({ error: 'Missing destination path in request or config' });

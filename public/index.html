@@ -257,7 +257,11 @@
     <button id="retryBtn" style="display:none;" onclick="retryDownload()">Retry</button>
 
     <div style="margin-top:10px;">
-        <button id="moveFilesBtn" onclick="moveDownloadedFiles()" disabled style="width:320px;">
+        <input id="moveDestinationInput" type="text" placeholder="Path folder tujuan move (contoh: \\server\share atau C:\\folder)" style="width:420px; margin-bottom:8px;">
+        <button id="browseMoveFolderBtn" onclick="browseMoveFolder()" type="button" style="padding:4px 8px; margin-left:6px; font-size:11px; min-width:60px;">Browse</button>
+        <button id="saveMoveFolderBtn" onclick="saveMoveFolder()" type="button" style="padding:4px 8px; font-size:11px; min-width:60px;">Simpan</button>
+        <br>
+        <button id="moveFilesBtn" onclick="moveDownloadedFiles()" disabled style="width:320px; margin-top:8px;">
             Pindah hasil download (0)
         </button>
     </div>
@@ -504,6 +508,7 @@
 
         async function refreshDownloadStatus() {
             const moveFilesBtn = document.getElementById('moveFilesBtn');
+            const moveDestinationInput = document.getElementById('moveDestinationInput');
 
             try {
                 const res = await fetch('/api/download-status');
@@ -511,14 +516,67 @@
                 const count = Number(data.count || 0);
                 moveFilesBtn.disabled = count <= 0;
                 moveFilesBtn.textContent = `Pindah hasil download (${count})`;
+
+                if (data.destination && moveDestinationInput && !moveDestinationInput.value.trim()) {
+                    moveDestinationInput.value = data.destination;
+                }
             } catch (err) {
                 moveFilesBtn.disabled = true;
                 moveFilesBtn.textContent = 'Pindah hasil download (error)';
             }
         }
 
+        async function browseMoveFolder() {
+            try {
+                const res = await fetch('/api/select-folder');
+                const data = await res.json();
+
+                if (data && data.ok && data.path) {
+                    const moveDestinationInput = document.getElementById('moveDestinationInput');
+                    if (moveDestinationInput) {
+                        moveDestinationInput.value = data.path;
+                    }
+                    resultPre.textContent = `📁 Folder dipilih: ${data.path}`;
+                } else {
+                    resultPre.textContent = '❌ Tidak ada folder yang dipilih.';
+                }
+            } catch (err) {
+                resultPre.textContent = '❌ Gagal membuka pemilih folder.';
+            }
+        }
+
+        async function saveMoveFolder() {
+            const moveDestinationInput = document.getElementById('moveDestinationInput');
+            const destination = moveDestinationInput ? moveDestinationInput.value.trim() : '';
+
+            if (!destination) {
+                resultPre.textContent = '❌ Path folder tujuan belum diisi.';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/save-output-move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ destination })
+                });
+                const data = await res.json();
+
+                if (data && data.ok) {
+                    resultPre.textContent = `✅ Folder tujuan tersimpan ke config.json:\n${data.destination}`;
+                    await refreshDownloadStatus();
+                } else {
+                    resultPre.textContent = `❌ Gagal menyimpan: ${data.error || 'Unknown error'}`;
+                }
+            } catch (err) {
+                resultPre.textContent = `❌ Gagal menyimpan: ${err.message || err}`;
+            }
+        }
+
         async function moveDownloadedFiles() {
             const moveFilesBtn = document.getElementById('moveFilesBtn');
+            const moveDestinationInput = document.getElementById('moveDestinationInput');
+            const destination = moveDestinationInput ? moveDestinationInput.value.trim() : '';
 
             moveFilesBtn.disabled = true;
             moveFilesBtn.textContent = 'Memindahkan...';
@@ -527,7 +585,7 @@
             progressBar.style.width = '0%';
             progressText.textContent = '0%';
 
-            const es = new EventSource('/api/move-downloads-stream');
+            const es = new EventSource(`/api/move-downloads-stream?destination=${encodeURIComponent(destination || '')}`);
 
             es.addEventListener('progress', (e) => {
                 try {

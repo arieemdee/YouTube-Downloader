@@ -13,26 +13,27 @@ const defaultConfig = {
     OUTPUT_DIR: "./downloads",
     OUTPUT_MOVE: ""
 };
-// Auto create config
-if (!fs.existsSync(configPath)) {
 
-    fs.mkdirSync(path.dirname(configPath), {
-        recursive: true
-    });
+function loadConfig() {
+    if (!fs.existsSync(configPath)) {
+        fs.mkdirSync(path.dirname(configPath), { recursive: true });
+        fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+    }
 
-    fs.writeFileSync(
-        configPath,
-        JSON.stringify(defaultConfig, null, 2)
-    );
+    return JSON.parse(fs.readFileSync(configPath, "utf8"));
 }
 
-const config = JSON.parse(
-    fs.readFileSync(configPath, "utf8")
-);
+function saveConfig(nextConfig) {
+    fs.writeFileSync(configPath, JSON.stringify(nextConfig, null, 2), "utf8");
+}
+
+const config = loadConfig();
 
 module.exports = {
     BASE_DIR,
     config,
+    loadConfig,
+    saveConfig,
     YTDLP_DIR: path.join(BASE_DIR, config.YTDLP_DIR),
     OUTPUT_DIR: path.join(BASE_DIR, config.OUTPUT_DIR),
     OUTPUT_MOVE: config.OUTPUT_MOVE || ""
