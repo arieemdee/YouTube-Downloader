@@ -1,213 +1,248 @@
-const checkFormatBtn = document.getElementById("checkFormatBtn");
-const downloadBtn = document.getElementById("downloadBtn");
-const urlInput = document.getElementById('url');
-const formatInput = document.getElementById('format');
-const formatsPre = document.getElementById('formats');
-const resultPre = document.getElementById('result');
-const cancelBtn = document.getElementById('cancelBtn');
-const retryBtn = document.getElementById('retryBtn');
-const progressWrap = document.getElementById('progressWrap');
-const progressBar = document.getElementById('progressBar');
-const progressText = document.getElementById('progressText');
+// File ini berisi logika utama UI untuk aplikasi downloader.
+// Struktur dibagi menurut area fungsi agar lebih mudah dibaca dan dirawat.
 
-if (urlInput) {
-  urlInput.addEventListener('focus', e => e.target.select());
-  urlInput.addEventListener('mouseup', e => e.preventDefault());
-}
+const DOM = {
+  checkFormatBtn: document.getElementById('checkFormatBtn'),
+  downloadBtn: document.getElementById('downloadBtn'),
+  urlInput: document.getElementById('url'),
+  formatInput: document.getElementById('format'),
+  formatsPre: document.getElementById('formats'),
+  resultPre: document.getElementById('result'),
+  cancelBtn: document.getElementById('cancelBtn'),
+  retryBtn: document.getElementById('retryBtn'),
+  progressWrap: document.getElementById('progressWrap'),
+  progressBar: document.getElementById('progressBar'),
+  progressText: document.getElementById('progressText'),
+};
 
-function handleEnterKey(e) {
-  const isEnter = e.key === 'Enter' || e.code === 'Enter';
-  if (!isEnter) return;
-  e.preventDefault();
-
-  if (document.activeElement === urlInput) {
-    getFormats();
-  } else if (document.activeElement === formatInput) {
-    downloadVideo();
+function initInputBehavior() {
+  // Memastikan input URL langsung terseleksi saat fokus agar lebih nyaman untuk edit ulang.
+  if (DOM.urlInput) {
+    DOM.urlInput.addEventListener('focus', (event) => event.target.select());
+    DOM.urlInput.addEventListener('mouseup', (event) => event.preventDefault());
   }
+
+  // Tekan Enter di URL = cek format, di format = mulai download.
+  const handleEnterKey = (event) => {
+    const isEnter = event.key === 'Enter' || event.code === 'Enter';
+    if (!isEnter) return;
+
+    event.preventDefault();
+
+    if (document.activeElement === DOM.urlInput) {
+      getFormats();
+    } else if (document.activeElement === DOM.formatInput) {
+      downloadVideo();
+    }
+  };
+
+  if (DOM.urlInput) DOM.urlInput.addEventListener('keydown', handleEnterKey);
+  if (DOM.formatInput) DOM.formatInput.addEventListener('keydown', handleEnterKey);
 }
 
-if (urlInput) {
-  urlInput.addEventListener('keydown', handleEnterKey);
+function setBusy(button, label, isBusy) {
+  if (!button) return;
+  button.disabled = isBusy;
+  button.textContent = isBusy ? label : button.dataset.defaultLabel || label;
 }
 
-if (formatInput) {
-  formatInput.addEventListener('keydown', handleEnterKey);
+function showResult(message) {
+  if (DOM.resultPre) DOM.resultPre.textContent = message;
 }
 
-async function getFormats() {
-  if (!checkFormatBtn || !formatsPre || !urlInput) return;
+function resetProgress() {
+  if (DOM.progressWrap) DOM.progressWrap.style.display = 'block';
+  if (DOM.progressBar) DOM.progressBar.style.width = '0%';
+  if (DOM.progressText) DOM.progressText.textContent = '0%';
+}
 
-  checkFormatBtn.disabled = true;
-  checkFormatBtn.textContent = 'Memeriksa...';
-
-  try {
-    const url = urlInput.value;
-    const res = await fetch('/api/formats', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
-    });
-
-    const text = await res.text();
-    const htmlContent = makeFormatIdsClickable(text);
-    formatsPre.innerHTML = htmlContent;
-  } catch (err) {
-    formatsPre.textContent = 'Terjadi kesalahan saat memeriksa format.';
-  } finally {
-    checkFormatBtn.disabled = false;
-    checkFormatBtn.textContent = 'Cek Format';
-  }
+function hideProgress(delay = 800) {
+  setTimeout(() => {
+    if (DOM.progressWrap) DOM.progressWrap.style.display = 'none';
+  }, delay);
 }
 
 function makeFormatIdsClickable(text) {
+  // Mengubah ID format menjadi elemen klik agar user bisa langsung pilih format.
   return text.replace(/\b([a-zA-Z0-9_-]+(?:\+[a-zA-Z0-9_-]+)*)\b/g, (match) => {
     return `<span class="format-id" onclick="selectFormat('${match}')" title="Klik untuk memilih">${match}</span>`;
   });
 }
 
 function selectFormat(formatId) {
-  if (!formatInput) return;
+  if (!DOM.formatInput) return;
 
-  const currentValue = formatInput.value.trim();
-  if (currentValue && !currentValue.endsWith('+')) {
-    formatInput.value = currentValue + '+' + formatId;
-  } else {
-    formatInput.value = formatId;
+  const currentValue = DOM.formatInput.value.trim();
+  DOM.formatInput.value = currentValue && !currentValue.endsWith('+')
+    ? `${currentValue}+${formatId}`
+    : formatId;
+
+  DOM.formatInput.focus();
+}
+
+// =========================
+// BAGIAN FORMAT / DOWNLOAD
+// =========================
+
+async function getFormats() {
+  if (!DOM.checkFormatBtn || !DOM.formatsPre || !DOM.urlInput) return;
+
+  DOM.checkFormatBtn.disabled = true;
+  DOM.checkFormatBtn.textContent = 'Memeriksa...';
+
+  try {
+    const response = await fetch('/api/formats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: DOM.urlInput.value })
+    });
+
+    const text = await response.text();
+    DOM.formatsPre.innerHTML = makeFormatIdsClickable(text);
+  } catch (error) {
+    DOM.formatsPre.textContent = 'Terjadi kesalahan saat memeriksa format.';
+  } finally {
+    DOM.checkFormatBtn.disabled = false;
+    DOM.checkFormatBtn.textContent = 'Cek Format';
   }
-
-  formatInput.focus();
 }
 
 async function downloadVideo() {
-  const url = urlInput ? urlInput.value.trim() : '';
-  const format = formatInput ? formatInput.value.trim() : '';
+  const url = DOM.urlInput?.value.trim() || '';
+  const format = DOM.formatInput?.value.trim() || '';
 
-  if (!resultPre) return;
+  if (!DOM.resultPre) return;
   if (!url) {
-    resultPre.textContent = '❌ URL tidak boleh kosong!';
+    showResult('❌ URL tidak boleh kosong!');
     return;
   }
 
   if (!format) {
-    resultPre.textContent = '❌ Format tidak boleh kosong!';
+    showResult('❌ Format tidak boleh kosong!');
     return;
   }
 
-  if (downloadBtn) {
-    downloadBtn.disabled = true;
-    downloadBtn.textContent = 'Downloading...';
-  }
-
-  resultPre.textContent = '';
+  // Mulai proses download dengan state UI yang jelas.
+  DOM.downloadBtn.disabled = true;
+  DOM.downloadBtn.textContent = 'Downloading...';
+  DOM.resultPre.textContent = '';
 
   const params = new URLSearchParams({ url, format });
-  const es = new EventSource(`/api/download-stream?${params.toString()}`);
+  const eventSource = new EventSource(`/api/download-stream?${params.toString()}`);
   let currentDownloadId = null;
 
-  if (cancelBtn) {
-    cancelBtn.style.display = 'inline-block';
-    cancelBtn.disabled = false;
+  if (DOM.cancelBtn) {
+    DOM.cancelBtn.style.display = 'inline-block';
+    DOM.cancelBtn.disabled = false;
   }
-  if (retryBtn) retryBtn.style.display = 'none';
-  if (progressWrap) progressWrap.style.display = 'block';
-  if (progressBar) progressBar.style.width = '0%';
-  if (progressText) progressText.textContent = '0%';
+  if (DOM.retryBtn) DOM.retryBtn.style.display = 'none';
 
-  es.onmessage = (e) => {
-    resultPre.textContent += e.data + '\n';
-    resultPre.scrollTop = resultPre.scrollHeight;
+  resetProgress();
+
+  eventSource.onmessage = (event) => {
+    DOM.resultPre.textContent += `${event.data}\n`;
+    DOM.resultPre.scrollTop = DOM.resultPre.scrollHeight;
   };
 
-  es.addEventListener('progress', (e) => {
-    const pct = parseFloat(e.data);
-    if (!Number.isNaN(pct)) {
-      const pctSafe = Math.max(0, Math.min(100, pct));
-      if (progressBar) progressBar.style.width = pctSafe + '%';
-      if (progressText) progressText.textContent = pctSafe.toFixed(1) + '%';
+  eventSource.addEventListener('progress', (event) => {
+    const percent = parseFloat(event.data);
+    if (!Number.isNaN(percent)) {
+      const safePercent = Math.max(0, Math.min(100, percent));
+      if (DOM.progressBar) DOM.progressBar.style.width = `${safePercent}%`;
+      if (DOM.progressText) DOM.progressText.textContent = `${safePercent.toFixed(1)}%`;
     }
   });
 
-  es.addEventListener('id', (e) => {
-    currentDownloadId = e.data;
+  eventSource.addEventListener('id', (event) => {
+    currentDownloadId = event.data;
   });
 
-  es.addEventListener('done', (e) => {
-    resultPre.textContent += '\n✅ Selesai.\n';
-    es.close();
-    if (downloadBtn) {
-      downloadBtn.disabled = false;
-      downloadBtn.textContent = 'Download';
+  eventSource.addEventListener('done', () => {
+    DOM.resultPre.textContent += '\n✅ Selesai.\n';
+    eventSource.close();
+
+    if (DOM.downloadBtn) {
+      DOM.downloadBtn.disabled = false;
+      DOM.downloadBtn.textContent = 'Download';
     }
-    if (formatInput) formatInput.value = '';
-    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (DOM.formatInput) DOM.formatInput.value = '';
+    if (DOM.cancelBtn) DOM.cancelBtn.style.display = 'none';
+
     refreshDownloadStatus();
-    setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 800);
+    hideProgress(800);
   });
 
-  es.addEventListener('error', (e) => {
-    resultPre.textContent += '\n❌ Terjadi kesalahan saat mengunduh.\n';
-    es.close();
-    if (downloadBtn) {
-      downloadBtn.disabled = false;
-      downloadBtn.textContent = 'Download';
+  eventSource.addEventListener('error', () => {
+    DOM.resultPre.textContent += '\n❌ Terjadi kesalahan saat mengunduh.\n';
+    eventSource.close();
+
+    if (DOM.downloadBtn) {
+      DOM.downloadBtn.disabled = false;
+      DOM.downloadBtn.textContent = 'Download';
     }
-    if (cancelBtn) cancelBtn.style.display = 'none';
-    if (retryBtn) retryBtn.style.display = 'inline-block';
+    if (DOM.cancelBtn) DOM.cancelBtn.style.display = 'none';
+    if (DOM.retryBtn) DOM.retryBtn.style.display = 'inline-block';
+
     refreshDownloadStatus();
-    setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 1500);
+    hideProgress(1500);
   });
 
-  window.cancelDownload = async function () {
+  window.cancelDownload = async () => {
     if (!currentDownloadId) return;
+
     try {
-      if (cancelBtn) cancelBtn.disabled = true;
-      const res = await fetch('/api/download-cancel', {
+      if (DOM.cancelBtn) DOM.cancelBtn.disabled = true;
+      const response = await fetch('/api/download-cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: currentDownloadId })
       });
-      const json = await res.json();
-      resultPre.textContent += json && json.ok
+
+      const json = await response.json();
+      DOM.resultPre.textContent += json && json.ok
         ? '\n⚠️ Download dibatalkan oleh pengguna.\n'
         : '\n⚠️ Gagal membatalkan download.\n';
-    } catch (err) {
-      resultPre.textContent += '\n⚠️ Error saat membatalkan.\n';
+    } catch (error) {
+      DOM.resultPre.textContent += '\n⚠️ Error saat membatalkan.\n';
     } finally {
-      try { es.close(); } catch (e) {}
-      if (downloadBtn) {
-        downloadBtn.disabled = false;
-        downloadBtn.textContent = 'Download';
+      try { eventSource.close(); } catch (error) {}
+      if (DOM.downloadBtn) {
+        DOM.downloadBtn.disabled = false;
+        DOM.downloadBtn.textContent = 'Download';
       }
-      if (cancelBtn) cancelBtn.style.display = 'none';
-      if (retryBtn) retryBtn.style.display = 'inline-block';
-      if (progressWrap) progressWrap.style.display = 'none';
+      if (DOM.cancelBtn) DOM.cancelBtn.style.display = 'none';
+      if (DOM.retryBtn) DOM.retryBtn.style.display = 'inline-block';
+      if (DOM.progressWrap) DOM.progressWrap.style.display = 'none';
     }
   };
 
-  window.retryDownload = function () {
-    if (retryBtn) retryBtn.style.display = 'none';
+  window.retryDownload = () => {
+    if (DOM.retryBtn) DOM.retryBtn.style.display = 'none';
     downloadVideo();
   };
 
-  es.onerror = () => {
-    if (es.readyState === EventSource.CLOSED) return;
-    resultPre.textContent += '\n❌ Koneksi terputus.\n';
-    es.close();
-    if (downloadBtn) {
-      downloadBtn.disabled = false;
-      downloadBtn.textContent = 'Download';
+  eventSource.onerror = () => {
+    if (eventSource.readyState === EventSource.CLOSED) return;
+    DOM.resultPre.textContent += '\n❌ Koneksi terputus.\n';
+    eventSource.close();
+    if (DOM.downloadBtn) {
+      DOM.downloadBtn.disabled = false;
+      DOM.downloadBtn.textContent = 'Download';
     }
   };
 }
+
+// =========================
+// BAGIAN MOVE FILE / FOLDER
+// =========================
 
 async function refreshDownloadStatus() {
   const moveFilesBtn = document.getElementById('moveFilesBtn');
   const moveDestinationInput = document.getElementById('moveDestinationInput');
 
   try {
-    const res = await fetch('/api/download-status');
-    const data = await res.json();
+    const response = await fetch('/api/download-status');
+    const data = await response.json();
     const count = Number(data.count || 0);
 
     if (moveFilesBtn) {
@@ -218,7 +253,7 @@ async function refreshDownloadStatus() {
     if (data.destination && moveDestinationInput && !moveDestinationInput.value.trim()) {
       moveDestinationInput.value = data.destination;
     }
-  } catch (err) {
+  } catch (error) {
     if (moveFilesBtn) {
       moveFilesBtn.disabled = true;
       moveFilesBtn.textContent = 'Pindah hasil download (error)';
@@ -228,114 +263,117 @@ async function refreshDownloadStatus() {
 
 async function browseMoveFolder() {
   try {
-    const res = await fetch('/api/select-folder');
-    const data = await res.json();
+    const response = await fetch('/api/select-folder');
+    const data = await response.json();
     const moveDestinationInput = document.getElementById('moveDestinationInput');
 
     if (data && data.ok && data.path && moveDestinationInput) {
       moveDestinationInput.value = data.path;
-      resultPre.textContent = `📁 Folder dipilih: ${data.path}`;
+      showResult(`📁 Folder dipilih: ${data.path}`);
     } else {
-      resultPre.textContent = '❌ Tidak ada folder yang dipilih.';
+      showResult('❌ Tidak ada folder yang dipilih.');
     }
-  } catch (err) {
-    resultPre.textContent = '❌ Gagal membuka pemilih folder.';
+  } catch (error) {
+    showResult('❌ Gagal membuka pemilih folder.');
   }
 }
 
 async function saveMoveFolder() {
   const moveDestinationInput = document.getElementById('moveDestinationInput');
-  const destination = moveDestinationInput ? moveDestinationInput.value.trim() : '';
+  const destination = moveDestinationInput?.value.trim() || '';
 
   if (!destination) {
-    resultPre.textContent = '❌ Path folder tujuan belum diisi.';
+    showResult('❌ Path folder tujuan belum diisi.');
     return;
   }
 
   try {
-    const res = await fetch('/api/save-output-move', {
+    const response = await fetch('/api/save-output-move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ destination })
     });
-    const data = await res.json();
+    const data = await response.json();
 
     if (data && data.ok) {
-      resultPre.textContent = `✅ Folder tujuan tersimpan ke config.json:\n${data.destination}`;
+      showResult(`✅ Folder tujuan tersimpan ke config.json:\n${data.destination}`);
       await refreshDownloadStatus();
     } else {
-      resultPre.textContent = `❌ Gagal menyimpan: ${data.error || 'Unknown error'}`;
+      showResult(`❌ Gagal menyimpan: ${data.error || 'Unknown error'}`);
     }
-  } catch (err) {
-    resultPre.textContent = `❌ Gagal menyimpan: ${err.message || err}`;
+  } catch (error) {
+    showResult(`❌ Gagal menyimpan: ${error.message || error}`);
   }
 }
 
 async function moveDownloadedFiles() {
   const moveFilesBtn = document.getElementById('moveFilesBtn');
   const moveDestinationInput = document.getElementById('moveDestinationInput');
-  const destination = moveDestinationInput ? moveDestinationInput.value.trim() : '';
+  const destination = moveDestinationInput?.value.trim() || '';
 
   if (moveFilesBtn) {
     moveFilesBtn.disabled = true;
     moveFilesBtn.textContent = 'Memindahkan...';
   }
 
-  resultPre.textContent = '';
-  if (progressWrap) progressWrap.style.display = 'block';
-  if (progressBar) progressBar.style.width = '0%';
-  if (progressText) progressText.textContent = '0%';
+  showResult('');
+  resetProgress();
 
-  const es = new EventSource(`/api/move-downloads-stream?destination=${encodeURIComponent(destination || '')}`);
+  const eventSource = new EventSource(`/api/move-downloads-stream?destination=${encodeURIComponent(destination || '')}`);
 
-  es.addEventListener('progress', (e) => {
+  eventSource.addEventListener('progress', (event) => {
     try {
-      const data = JSON.parse(e.data);
-      const pct = Number.isFinite(data.percent) ? Math.max(0, Math.min(100, data.percent)) : 0;
-      if (progressBar) progressBar.style.width = pct + '%';
-      if (progressText) progressText.textContent = `${pct}% (${data.completed || 0}/${data.total || 0})`;
-      resultPre.textContent = `📦 Memindahkan ${data.filename || 'file'} (${data.completed || 0}/${data.total || 0})...`;
-      resultPre.scrollTop = resultPre.scrollHeight;
-    } catch (err) {
+      const data = JSON.parse(event.data);
+      const percent = Number.isFinite(data.percent) ? Math.max(0, Math.min(100, data.percent)) : 0;
+
+      if (DOM.progressBar) DOM.progressBar.style.width = `${percent}%`;
+      if (DOM.progressText) DOM.progressText.textContent = `${percent}% (${data.completed || 0}/${data.total || 0})`;
+
+      DOM.resultPre.textContent = `📦 Memindahkan ${data.filename || 'file'} (${data.completed || 0}/${data.total || 0})...`;
+      DOM.resultPre.scrollTop = DOM.resultPre.scrollHeight;
+    } catch (error) {
       // ignore parse errors
     }
   });
 
-  es.addEventListener('done', (e) => {
+  eventSource.addEventListener('done', (event) => {
     try {
-      const data = JSON.parse(e.data);
-      resultPre.textContent = data.status === 'success'
+      const data = JSON.parse(event.data);
+      DOM.resultPre.textContent = data.status === 'success'
         ? `✅ Dipindah ${data.moved} file ke:\n${data.destination}`
         : `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
-      if (progressBar) progressBar.style.width = '100%';
-      if (progressText) progressText.textContent = '100%';
-    } catch (err) {
-      resultPre.textContent = '❌ Gagal memindahkan file.';
+
+      if (DOM.progressBar) DOM.progressBar.style.width = '100%';
+      if (DOM.progressText) DOM.progressText.textContent = '100%';
+    } catch (error) {
+      DOM.resultPre.textContent = '❌ Gagal memindahkan file.';
     }
-    es.close();
-    refreshDownloadStatus().finally(() => {
-      setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 800);
-    });
+
+    eventSource.close();
+    refreshDownloadStatus().finally(() => hideProgress(800));
   });
 
-  es.addEventListener('error', (e) => {
+  eventSource.addEventListener('error', (event) => {
     try {
-      const data = JSON.parse(e.data);
-      resultPre.textContent = `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
-    } catch (err) {
-      resultPre.textContent = '❌ Gagal memindahkan file.';
+      const data = JSON.parse(event.data);
+      DOM.resultPre.textContent = `❌ Gagal memindahkan: ${data.error || 'Unknown error'}`;
+    } catch (error) {
+      DOM.resultPre.textContent = '❌ Gagal memindahkan file.';
     }
-    es.close();
-    refreshDownloadStatus().finally(() => {
-      setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 1200);
-    });
+
+    eventSource.close();
+    refreshDownloadStatus().finally(() => hideProgress(1200));
   });
 
-  es.onerror = () => {
-    if (es.readyState === EventSource.CLOSED) return;
-    es.close();
+  eventSource.onerror = () => {
+    if (eventSource.readyState === EventSource.CLOSED) return;
+    eventSource.close();
   };
 }
+
+// =========================
+// BAGIAN UPDATE / STATUS
+// =========================
 
 async function checkUpdate() {
   const checkBtn = document.getElementById('checkUpdateBtn');
@@ -354,12 +392,12 @@ async function checkUpdate() {
   statusDiv.textContent = '🔄 Memeriksa update...';
 
   try {
-    const res = await fetch('/api/check-update');
-    const data = await res.json();
+    const response = await fetch('/api/check-update');
+    const data = await response.json();
 
     if (data.error) {
       statusDiv.className = 'update-status error';
-      statusDiv.textContent = '❌ Error: ' + data.error;
+      statusDiv.textContent = `❌ Error: ${data.error}`;
       return;
     }
 
@@ -380,9 +418,9 @@ async function checkUpdate() {
       statusDiv.className = 'update-status latest';
       statusDiv.textContent = `✅ Sudah versi terbaru: ${data.currentVersion}`;
     }
-  } catch (err) {
+  } catch (error) {
     statusDiv.className = 'update-status error';
-    statusDiv.textContent = '❌ Error: ' + err.message;
+    statusDiv.textContent = `❌ Error: ${error.message}`;
   } finally {
     checkBtn.disabled = false;
   }
@@ -407,11 +445,11 @@ async function performUpdate() {
   statusDiv.textContent = '📥 Sedang update... Mohon tunggu, jangan tutup aplikasi!';
 
   try {
-    const res = await fetch('/api/update', {
+    const response = await fetch('/api/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-    const data = await res.json();
+    const data = await response.json();
 
     if (data.status === 'success' || data.status === 'already_latest') {
       statusDiv.className = 'update-status latest';
@@ -421,9 +459,9 @@ async function performUpdate() {
       statusDiv.className = 'update-status error';
       statusDiv.textContent = `❌ Update gagal: ${data.message}`;
     }
-  } catch (err) {
+  } catch (error) {
     statusDiv.className = 'update-status error';
-    statusDiv.textContent = '❌ Error: ' + err.message;
+    statusDiv.textContent = `❌ Error: ${error.message}`;
   } finally {
     updateBtn.disabled = false;
   }
@@ -439,11 +477,11 @@ async function clearUpdateCache() {
   cacheInfoDiv.textContent = '🗑️ Sedang menghapus cache...';
 
   try {
-    const res = await fetch('/api/clear-update-cache', {
+    const response = await fetch('/api/clear-update-cache', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-    const data = await res.json();
+    const data = await response.json();
 
     if (data.success) {
       cacheInfoDiv.textContent = '✅ Cache dihapus! Next check akan hit API baru.';
@@ -451,14 +489,15 @@ async function clearUpdateCache() {
     } else {
       cacheInfoDiv.textContent = '⚠️ Cache sudah kosong';
     }
-  } catch (err) {
-    cacheInfoDiv.textContent = '❌ Error: ' + err.message;
+  } catch (error) {
+    cacheInfoDiv.textContent = `❌ Error: ${error.message}`;
   } finally {
     clearCacheBtn.disabled = false;
   }
 }
 
 window.addEventListener('load', () => {
+  initInputBehavior();
   checkUpdate();
   refreshDownloadStatus();
 });
