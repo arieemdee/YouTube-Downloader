@@ -62,6 +62,47 @@ function hideProgress(delay = 800) {
   }, delay);
 }
 
+async function refreshHistory() {
+  const historyList = document.getElementById('historyList');
+  if (!historyList) return;
+
+  try {
+    const response = await fetch('/api/history');
+    const data = await response.json();
+
+    if (!Array.isArray(data) || !data.length) {
+      historyList.innerHTML = '<div class="history-empty">Belum ada riwayat download.</div>';
+      return;
+    }
+
+    historyList.innerHTML = data.map((item) => {
+      const createdAt = item.createdAt ? new Date(item.createdAt).toLocaleString('id-ID') : '—';
+      const statusLabel = item.status === 'success' ? 'Sukses' : 'Gagal';
+      const urlLabel = item.url ? item.url : 'URL tidak tersedia';
+      return `
+        <article class="history-card">
+          <strong>${escapeHtml(urlLabel)}</strong>
+          <div class="history-meta">
+            <span>Format: ${escapeHtml(item.format || '-')}</span>
+            <span>Waktu: ${escapeHtml(createdAt)}</span>
+            <span class="history-badge">${statusLabel}</span>
+          </div>
+        </article>`;
+    }).join('');
+  } catch (error) {
+    historyList.innerHTML = '<div class="history-empty">Gagal memuat riwayat.</div>';
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function makeFormatIdsClickable(text) {
   // Mengubah ID format menjadi elemen klik agar user bisa langsung pilih format.
   return text.replace(/\b([a-zA-Z0-9_-]+(?:\+[a-zA-Z0-9_-]+)*)\b/g, (match) => {
@@ -169,6 +210,7 @@ async function downloadVideo() {
     if (DOM.cancelBtn) DOM.cancelBtn.style.display = 'none';
 
     refreshDownloadStatus();
+    refreshHistory();
     hideProgress(800);
   });
 
@@ -500,4 +542,5 @@ window.addEventListener('load', () => {
   initInputBehavior();
   checkUpdate();
   refreshDownloadStatus();
+  refreshHistory();
 });

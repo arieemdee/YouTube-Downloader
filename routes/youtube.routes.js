@@ -32,6 +32,7 @@ const {
 } = require("../services/download.service");
 
 const { OUTPUT_MOVE, loadConfig, saveConfig } = require("../utils/paths");
+const { addHistoryRecord, getHistory } = require("../utils/history");
 
 router.post("/formats", async (req, res) => {
     const { url } = req.body;
@@ -153,10 +154,30 @@ router.get("/download-stream", (req, res) => {
     req.on("close", onCloseReq);
 
     promise.then(() => {
-        // close after the process completes
+        // simpan riwayat setelah download berhasil
+        try {
+            addHistoryRecord({
+                url,
+                format,
+                status: 'success'
+            });
+        } catch (historyErr) {
+            // abaikan bila penyimpanan history gagal
+        }
+
         res.write(`event: done\ndata: ✅ Download selesai\n\n`);
         res.end();
     }).catch((err) => {
+        try {
+            addHistoryRecord({
+                url,
+                format,
+                status: 'failed'
+            });
+        } catch (historyErr) {
+            // abaikan bila penyimpanan history gagal
+        }
+
         const msg = err && err.toString ? err.toString() : JSON.stringify(err);
         const lines = msg
             .split(/\r?\n/)
@@ -283,6 +304,15 @@ router.get('/move-downloads-stream', async (req, res) => {
         })}\n\n`);
     } finally {
         res.end();
+    }
+});
+
+// History download terbaru (maks 10 record)
+router.get('/history', (req, res) => {
+    try {
+        res.json(getHistory());
+    } catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to read history' });
     }
 });
 

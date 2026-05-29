@@ -96,6 +96,17 @@
                 </div>
             </aside>
         </section>
+
+        <section class="panel history-panel">
+            <div class="history-header">
+                <div>
+                    <h2>Riwayat download</h2>
+                    <p>10 record terakhir akan tersimpan otomatis di file JSON untuk referensi cepat.</p>
+                </div>
+                <button id="refreshHistoryBtn" class="btn-ghost" onclick="refreshHistory()" type="button">Refresh</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+        </section>
     </main>
 
     <script src="app.js"></script>
