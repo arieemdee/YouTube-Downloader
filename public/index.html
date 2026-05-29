@@ -5,297 +5,415 @@
     <title>YouTube Downloader</title>
 
     <style>
-
-        body{
-            font-family: Arial;
-            background:#111;
-            color:#0f0;
-            padding:40px;
+        :root {
+            color-scheme: dark;
+            --bg: #060816;
+            --panel: rgba(15, 23, 42, 0.82);
+            --panel-2: rgba(8, 12, 24, 0.92);
+            --line: rgba(148, 163, 184, 0.18);
+            --text: #eff6ff;
+            --muted: #cbd5e1;
+            --accent: #22d3ee;
+            --accent-2: #8b5cf6;
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #fb7185;
+            --shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
         }
 
-        input, button{
-            padding:10px;
-            margin:5px;
-            width:400px;
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top, rgba(56, 189, 248, 0.10), transparent 25%),
+                radial-gradient(circle at right top, rgba(139, 92, 246, 0.12), transparent 20%),
+                linear-gradient(180deg, #04070f 0%, #060816 45%, #020617 100%);
         }
 
-        button{
-            background:#0f0;
-            color:#000;
-            border:none;
-            cursor:pointer;
-            font-weight:bold;
+        .app-shell {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 28px 18px 52px;
         }
 
-        button:disabled{
-            background:#444;
-            color:#999;
-            cursor:not-allowed;
+        .hero-card, .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(14px);
         }
 
-        pre{
-            background:#000;
-            padding:15px;
-            overflow:auto;
-            white-space:pre-wrap;
+        .hero-card {
+            padding: 22px 24px;
+            margin-bottom: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: end;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid rgba(34, 211, 238, 0.25);
+            background: rgba(34, 211, 238, 0.08);
+            border-radius: 999px;
+            color: #bae6fd;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.6px;
+        }
+
+        h1 {
+            margin: 8px 0 6px;
+            font-size: clamp(1.9rem, 4vw, 2.6rem);
+            line-height: 1.1;
+        }
+
+        .subtle {
+            color: var(--muted);
+            font-size: 14px;
+            max-width: 680px;
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chip {
+            padding: 8px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.72);
+            color: #dbeafe;
+            font-size: 12px;
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 18px;
+        }
+
+        .panel {
+            padding: 18px;
+        }
+
+        .panel h2 {
+            font-size: 1rem;
+            margin: 0 0 6px;
+            color: #e0f2fe;
+        }
+
+        .panel p {
+            color: var(--muted);
+            margin-top: 0;
+            font-size: 13px;
+        }
+
+        .field {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .field label {
+            color: #bfdbfe;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+
+        input, button, pre {
+            border-radius: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(7, 11, 23, 0.92);
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input:focus {
+            border-color: rgba(34, 211, 238, 0.8);
+            box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.10);
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        button {
+            border: 1px solid transparent;
+            padding: 11px 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.14s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(8, 145, 178, 0.18);
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%);
+            color: #03111d;
+        }
+
+        .btn-secondary {
+            background: rgba(15, 23, 42, 0.92);
+            color: #e0f2fe;
+            border-color: rgba(148, 163, 184, 0.22);
+        }
+
+        .btn-ghost {
+            background: rgba(148, 163, 184, 0.08);
+            color: #dbeafe;
+            border-color: rgba(148, 163, 184, 0.18);
+        }
+
+        .btn-danger {
+            background: rgba(251, 113, 133, 0.08);
+            color: #fecdd3;
+            border-color: rgba(251, 113, 133, 0.22);
+        }
+
+        pre {
+            margin: 0;
+            padding: 12px;
+            background: rgba(2, 6, 23, 0.88);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            color: #dbeafe;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-size: 12px;
+            line-height: 1.45;
         }
 
         .format-id {
             cursor: pointer;
-            color: #6f6;
-            font-weight: bold;
+            color: #67e8f9;
+            font-weight: 700;
             padding: 2px 4px;
-            border-radius: 3px;
+            border-radius: 6px;
             transition: all 0.2s ease;
         }
 
         .format-id:hover {
-            background: #1a1a1a;
-            color: #0f0;
-            text-shadow: 0 0 5px #0f0;
+            background: rgba(34, 211, 238, 0.08);
+            color: #a5f3fc;
         }
 
-        /* Progress bar */
-        .progress-wrap{
-            width:400px;
-            background:#111;
-            border:1px solid #333;
-            padding:6px;
-            margin:8px 0;
-            display:none;
+        .progress-wrap {
+            width: 100%;
+            background: rgba(8, 12, 24, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 14px;
+            padding: 10px;
+            margin-top: 10px;
+            display: none;
         }
 
-        .progress{
-            width:100%;
-            height:18px;
-            background:#222;
-            border-radius:4px;
-            overflow:hidden;
+        .progress {
+            width: 100%;
+            height: 12px;
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 999px;
+            overflow: hidden;
         }
 
-        .progress-bar{
-            height:100%;
-            width:0%;
-            background:linear-gradient(90deg,#0f0,#6f6);
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #22d3ee 0%, #8b5cf6 100%);
             transition: width 200ms linear;
         }
 
-        .progress-text{
-            margin-top:6px;
-            color:#0f0;
-            font-size:12px;
+        .progress-text {
+            margin-top: 6px;
+            color: #bae6fd;
+            font-size: 12px;
         }
 
-        /* 👇 BRANDING SECTION - MD Engine */
-        .branding {
-            text-align: center;
-            margin: -15px 0 25px 0;
-            padding: 15px;
-            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
-            border-radius: 6px;
-            border: 1px solid #1a4a1a;
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.1);
-            transition: all 0.3s ease;
-        }
-
-        .branding:hover {
-            border: 1px solid #0f0;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-            transform: translateY(-2px);
-        }
-
-        .branding a {
-            text-decoration: none;
-            color: #0f0;
-            font-size: 14px;
-            font-weight: bold;
-            letter-spacing: 1px;
-            display: inline-block;
-            padding: 8px 15px;
-            background: rgba(0, 255, 0, 0.05);
-            border-radius: 4px;
-            border: 1px solid rgba(0, 255, 0, 0.3);
-            transition: all 0.3s ease;
-        }
-
-        .branding a:hover {
-            background: rgba(0, 255, 0, 0.15);
-            border: 1px solid #0f0;
-            text-shadow: 0 0 8px #0f0;
-            transform: scale(1.05);
-        }
-
-        .branding-icon {
-            font-size: 18px;
-            margin-right: 8px;
-            display: inline-block;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        /* Update section */
         .update-section {
-            margin: 20px 0;
-            padding: 10px;
-            border: 1px solid #333;
-            border-radius: 4px;
-            background: #0a0a0a;
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(2, 6, 23, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.14);
         }
 
         .update-status {
             display: none;
             padding: 10px;
             margin-bottom: 10px;
-            border-radius: 4px;
-            font-weight: bold;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 13px;
         }
 
-        .update-status.checking {
-            display: block;
-            background: #1a1a1a;
-            color: #0f0;
-            border: 1px solid #0f0;
+        .update-status.checking { display: block; background: rgba(34, 211, 238, 0.08); color: #bae6fd; border: 1px solid rgba(34, 211, 238, 0.18); }
+        .update-status.available { display: block; background: rgba(251, 191, 36, 0.08); color: #fde68a; border: 1px solid rgba(251, 191, 36, 0.18); }
+        .update-status.latest { display: block; background: rgba(52, 211, 153, 0.08); color: #bbf7d0; border: 1px solid rgba(52, 211, 153, 0.18); }
+        .update-status.updating { display: block; background: rgba(56, 189, 248, 0.08); color: #bae6fd; border: 1px solid rgba(56, 189, 248, 0.18); }
+        .update-status.error { display: block; background: rgba(251, 113, 133, 0.08); color: #fecdd3; border: 1px solid rgba(251, 113, 133, 0.18); }
+
+        .cache-info { color: #cbd5e1; font-size: 12px; margin-top: 8px; }
+
+        .branding {
+            margin-top: 12px;
+            text-align: center;
+            padding: 10px;
+            border-radius: 14px;
+            background: rgba(2, 6, 23, 0.82);
+            border: 1px solid rgba(148, 163, 184, 0.12);
         }
 
-        .update-status.available {
-            display: block;
-            background: #2a1a0a;
-            color: #fa0;
-            border: 1px solid #fa0;
+        .branding a {
+            text-decoration: none;
+            color: #dbeafe;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 999px;
+            background: rgba(34, 211, 238, 0.07);
+            border: 1px solid rgba(34, 211, 238, 0.16);
         }
 
-        .update-status.latest {
-            display: block;
-            background: #0a1a0a;
-            color: #0a0;
-            border: 1px solid #0a0;
+        .branding-icon { animation: pulse 2s infinite; }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+
+        @media (max-width: 980px) {
+            .layout-grid { grid-template-columns: 1fr; }
         }
 
-        .update-status.updating {
-            display: block;
-            background: #1a1a2a;
-            color: #0af;
-            border: 1px solid #0af;
+        @media (max-width: 720px) {
+            .app-shell { padding: 16px 12px 30px; }
+            .hero-card, .panel { border-radius: 18px; }
+            .button-row { flex-direction: column; }
+            button { width: 100%; }
         }
-
-        .update-status.error {
-            display: block;
-            background: #2a0a0a;
-            color: #f00;
-            border: 1px solid #f00;
-        }
-
-        #updateBtn {
-            width: auto;
-            padding: 5px 12px;
-            margin-right: 10px;
-        }
-
-        #checkUpdateBtn {
-            width: auto;
-            padding: 5px 12px;
-        }
-
-        .cache-info {
-            margin-top: 10px;
-            font-size: 11px;
-            color: #666;
-        }
-
-        #clearCacheBtn {
-            width: auto;
-            padding: 6px 10px;
-            font-size: 12px;
-            margin-top: 5px;
-            background: #444;
-            color: #888;
-        }
-
-        #clearCacheBtn:hover {
-            background: #555;
-            color: #aaa;
-        }
-
     </style>
 
 </head>
 <body>
+    <main class="app-shell">
+        <section class="hero-card">
+            <div>
+                <span class="eyebrow">✨ Elegant downloader</span>
+                <h1>🎬 YouTube Downloader</h1>
+                <p class="subtle">Buat proses download lebih rapi, cepat, dan nyaman dipantau. Susunan kartu ini membantu fokus pada URL, format, dan status update tanpa terasa padat.</p>
+            </div>
+            <div class="chip-row" aria-label="fitur utama">
+                <span class="chip">Format siap pilih</span>
+                <span class="chip">Progress real-time</span>
+                <span class="chip">Move folder otomatis</span>
+            </div>
+        </section>
 
-    <h1>🎬 YouTube Downloader</h1>
+        <section class="layout-grid">
+            <article class="panel">
+                <h2>Download utama</h2>
+                <p>Masukkan link YouTube, pilih format, lalu jalankan download.</p>
 
-    <input
-        type="text"
-        id="url"
-        autocomplete="off"
-        placeholder="Masukkan URL YouTube"
-    >
+                <div class="field">
+                    <label for="url">URL Video</label>
+                    <input id="url" type="text" autocomplete="off" placeholder="Masukkan URL YouTube">
+                </div>
 
-    <br>
+                <div class="button-row">
+                    <button id="checkFormatBtn" class="btn-primary" onclick="getFormats()">Cek Format</button>
+                </div>
 
-    <button id="checkFormatBtn" onclick="getFormats()">
-        Cek Format
-    </button>
+                <pre id="formats" style="max-height: 220px; overflow-y: auto; margin-top: 12px;"></pre>
 
-    <pre id="formats" style="max-height: 200px; overflow-y: auto;"></pre>
+                <div class="field" style="margin-top: 12px;">
+                    <label for="format">Format yang dipilih</label>
+                    <input id="format" type="text" placeholder="Contoh: 136+140">
+                </div>
 
-    <input
-        type="text"
-        id="format"
-        placeholder="Contoh: 136+140"
-    >
+                <div class="button-row">
+                    <button id="downloadBtn" class="btn-primary" onclick="downloadVideo()">Download</button>
+                    <button id="cancelBtn" class="btn-danger" style="display:none;" onclick="cancelDownload()">Cancel</button>
+                    <button id="retryBtn" class="btn-secondary" style="display:none;" onclick="retryDownload()">Retry</button>
+                </div>
 
-    <br>
+                <div class="progress-wrap" id="progressWrap">
+                    <div class="progress" aria-hidden="true">
+                        <div id="progressBar" class="progress-bar"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">0%</div>
+                </div>
 
-    <button id="downloadBtn" onclick="downloadVideo()">
-        Download
-    </button>
-    <button id="cancelBtn" style="display:none;" onclick="cancelDownload()">Cancel</button>
-    <button id="retryBtn" style="display:none;" onclick="retryDownload()">Retry</button>
+                <pre id="result" style="max-height: 170px; overflow-y: auto; margin-top: 12px;"></pre>
+            </article>
 
-    <div style="margin-top:10px;">
-        <input id="moveDestinationInput" type="text" placeholder="Path folder tujuan move (contoh: \\server\share atau C:\\folder)" style="width:420px; margin-bottom:8px;">
-        <button id="browseMoveFolderBtn" onclick="browseMoveFolder()" type="button" style="padding:4px 8px; margin-left:6px; font-size:11px; min-width:60px;">Browse</button>
-        <button id="saveMoveFolderBtn" onclick="saveMoveFolder()" type="button" style="padding:4px 8px; font-size:11px; min-width:60px;">Simpan</button>
-        <br>
-        <button id="moveFilesBtn" onclick="moveDownloadedFiles()" disabled style="width:320px; margin-top:8px;">
-            Pindah hasil download (0)
-        </button>
-    </div>
+            <aside class="panel">
+                <h2>Pengaturan lanjut</h2>
+                <p>Atur folder tujuan dan update aplikasi dari satu tempat yang rapi.</p>
 
-    <div class="progress-wrap" id="progressWrap">
-        <div class="progress" aria-hidden="true">
-            <div id="progressBar" class="progress-bar"></div>
-        </div>
-        <div class="progress-text" id="progressText">0%</div>
-    </div>
+                <div class="field">
+                    <label for="moveDestinationInput">Folder tujuan pindah</label>
+                    <input id="moveDestinationInput" type="text" placeholder="Contoh: \\server\share atau C:\\folder">
+                </div>
 
-    <!-- Update Section -->
-    <div class="update-section">
-        <div id="updateStatus" class="update-status"></div>
-        <button id="checkUpdateBtn" onclick="checkUpdate()">
-            🔄 Cek Update
-        </button>
-        <button id="updateBtn" onclick="performUpdate()" style="display:none;">
-            📥 Update Sekarang
-        </button>
-        <!-- Cache Info & Clear Cache Button -->
-        <div class="cache-info" id="cacheInfo"></div>
-        <button id="clearCacheBtn" onclick="clearUpdateCache()" style="display:none;">
-            🗑️ Clear Cache
-        </button>
-    </div>
-    <!-- 👇 BRANDING - MD Engine -->
-    <span class="branding">
-        <a href="https://md-engine.com" target="_blank" rel="noopener noreferrer">
-            <span class="branding-icon">⚙️</span>
-            Powered by MD Engine
-        </a>
-    </span>
-    <pre id="result" style="max-height: 150px; overflow-y: auto; border: 1px solid #ccc;"></pre>
+                <div class="button-row">
+                    <button id="browseMoveFolderBtn" class="btn-secondary" onclick="browseMoveFolder()" type="button">Browse</button>
+                    <button id="saveMoveFolderBtn" class="btn-ghost" onclick="saveMoveFolder()" type="button">Simpan</button>
+                </div>
+
+                <div class="button-row" style="margin-top: 10px;">
+                    <button id="moveFilesBtn" class="btn-secondary" onclick="moveDownloadedFiles()" disabled>Pindah hasil download (0)</button>
+                </div>
+
+                <div class="update-section">
+                    <h2 style="margin-bottom: 6px;">Update & status</h2>
+                    <p style="margin-bottom: 10px;">Cek versi terbaru serta bersihkan cache update jika diperlukan.</p>
+                    <div id="updateStatus" class="update-status"></div>
+                    <div class="button-row">
+                        <button id="checkUpdateBtn" class="btn-secondary" onclick="checkUpdate()">🔄 Cek Update</button>
+                        <button id="updateBtn" class="btn-primary" onclick="performUpdate()" style="display:none;">📥 Update Sekarang</button>
+                    </div>
+                    <div class="cache-info" id="cacheInfo"></div>
+                    <button id="clearCacheBtn" class="btn-ghost" onclick="clearUpdateCache()" style="display:none;">🗑️ Clear Cache</button>
+                </div>
+
+                <div class="branding">
+                    <a href="https://md-engine.com" target="_blank" rel="noopener noreferrer">
+                        <span class="branding-icon">⚙️</span>
+                        Powered by MD Engine
+                    </a>
+                </div>
+            </aside>
+        </section>
+    </main>
 
     <script>
 
